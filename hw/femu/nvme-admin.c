@@ -1,6 +1,24 @@
 #include "./nvme.h"
-
 #define NVME_IDENTIFY_DATA_SIZE 4096
+
+// HotStorage
+#include "variables.h"
+#include "bbssd/ftl.h"
+int *pecycle = NULL;
+// extern static void printPEcycle(struct ssdparams *spp);
+static void printPEcycle(struct ssdparams *spp) {
+    for (int i = 0; i < spp->tt_blks; i++) {
+        for (int j = 0; j < spp->pgs_per_blk; j++) {
+            printf("%d ", pecycle[i*spp->pgs_per_blk + j]);
+        }
+    }
+    printf("\n");
+}
+static void resetPEcycle(struct ssdparams *spp) {
+    for (int i = 0; i < spp->tt_pgs; i++) {
+        pecycle[i] = 0;
+    }  
+}
 
 #if 0
 static const bool nvme_feature_support[NVME_FID_MAX] = {
@@ -600,6 +618,10 @@ static uint16_t nvme_get_feature(FemuCtrl *n, NvmeCmd *cmd, NvmeCqe *cqe)
     case NVME_SOFTWARE_PROGRESS_MARKER:
         cqe->n.result = cpu_to_le32(n->features.sw_prog_marker);
         break;
+    // HotStorage
+    case NVME_REPORT_PECYCLE:
+        printPEcycle(&n->ssd->sp);
+        break;        
     default:
         return NVME_INVALID_FIELD | NVME_DNR;
     }
@@ -670,6 +692,10 @@ static uint16_t nvme_set_feature(FemuCtrl *n, NvmeCmd *cmd, NvmeCqe *cqe)
     case NVME_SOFTWARE_PROGRESS_MARKER:
         n->features.sw_prog_marker = dw11;
         break;
+    // HotStorage
+    case NVME_RESET_PECYCLE:
+        resetPEcycle(&n->ssd->sp);
+        break;             
     default:
         return NVME_INVALID_FIELD | NVME_DNR;
     }

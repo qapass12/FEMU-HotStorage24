@@ -1,5 +1,6 @@
 #include "ftl.h"
-
+// HotStorage
+#include "../variables.h"
 //#define FEMU_DEBUG_FTL
 
 static void *ftl_thread(void *arg);
@@ -154,11 +155,40 @@ static struct line *get_next_free_line(struct ssd *ssd)
     return curline;
 }
 
+// HotStorage
+static uint64_t physical_page_address_flattening(struct ssdparams *spp, struct write_pointer *wpp)
+{
+    uint64_t physical_page = (wpp->ch * spp->luns_per_ch * spp->pls_per_lun * spp->blks_per_pl * spp->pgs_per_blk) + \
+                            (wpp->lun * spp->pls_per_lun * spp->blks_per_pl * spp->pgs_per_blk) + \
+                            (wpp->pl * spp->blks_per_pl * spp->pgs_per_blk) + \
+                            (wpp->blk * spp->pgs_per_blk);
+
+    return physical_page;
+}
+static void advance_PEcycle(struct ssd *ssd, struct write_pointer *wpp)
+{
+    struct ssdparams *spp = &ssd->sp;
+
+    uint64_t page_address = physical_page_address_flattening(spp, wpp);
+    pecycle[page_address]++;
+}
+static uint64_t get_PEcycle(struct ssd *ssd, struct write_pointer *wpp)
+{
+    struct ssdparams *spp = &ssd->sp;
+
+    uint64_t page_address = physical_page_address_flattening(spp, wpp);
+
+    return pecycle[page_address];
+}
 static void ssd_advance_write_pointer(struct ssd *ssd)
 {
     struct ssdparams *spp = &ssd->sp;
     struct write_pointer *wpp = &ssd->wp;
     struct line_mgmt *lm = &ssd->lm;
+
+    printf("Before PEadvance: (%ld) / ", get_PEcycle(ssd, wpp));
+    advance_PEcycle(ssd, wpp);
+    printf("After PEadvance: (%ld)\n", get_PEcycle(ssd, wpp));
 
     check_addr(wpp->ch, spp->nchs);
     wpp->ch++;
@@ -261,6 +291,15 @@ static void ssd_init_params(struct ssdparams *spp)
     spp->pgs_per_ch = spp->pgs_per_lun * spp->luns_per_ch;
     spp->tt_pgs = spp->pgs_per_ch * spp->nchs;
 
+    // HotStorage
+    int *pecycle = (int *)malloc(spp->tt_pgs * sizeof(int));
+    if (pecycle == NULL) {
+        ftl_err("pecycle allocation failed\n");
+    }
+    for (int i = 0; i < spp->tt_pgs; i++) {
+        pecycle[i] = 0;
+    }  
+
     spp->blks_per_lun = spp->blks_per_pl * spp->pls_per_lun;
     spp->blks_per_ch = spp->blks_per_lun * spp->luns_per_ch;
     spp->tt_blks = spp->blks_per_ch * spp->nchs;
@@ -281,7 +320,6 @@ static void ssd_init_params(struct ssdparams *spp)
     spp->gc_thres_pcent_high = 0.95;
     spp->gc_thres_lines_high = (int)((1 - spp->gc_thres_pcent_high) * spp->tt_lines);
     spp->enable_gc_delay = true;
-
 
     check_params(spp);
 }

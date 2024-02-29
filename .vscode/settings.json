@@ -1,0 +1,6 @@
+{
+    "files.associations": {
+        "array": "c",
+        "nvme.h": "c"
+    }
+}
