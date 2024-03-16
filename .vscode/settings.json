@@ -4,6 +4,7 @@
         "nvme.h": "c",
         "variables.h": "c",
         "ftl.h": "c",
-        "*.idef": "c"
+        "*.idef": "c",
+        "*.tcc": "c"
     }
 }

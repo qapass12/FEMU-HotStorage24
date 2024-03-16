@@ -825,6 +825,7 @@ enum NvmeFeatureIds {
     NVME_PRINT_PECYCLE              = 0x82,
     NVME_REPORT_PECYCLE             = 0x83,
     NVME_RESET_PECYCLE              = 0x84,
+    NVME_REPORT_WAF                 = 0x85,
     //
     NVME_FID_MAX                    = 0x100
 };

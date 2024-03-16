@@ -73,6 +73,12 @@ static void resetPEcycle(struct ssdparams *spp) {
         pecycle[i] = 0;
     }  
 }
+static void reportWAF(void) {
+    printf("host_write_bytes(%ld)\n", host_write_bytes);
+    printf("data_write_bytes(%ld)\n", data_write_bytes);
+    if(host_write_bytes == 0) printf("waf(NULL)\n");
+    else printf("waf(%ld)\n", data_write_bytes/host_write_bytes);
+}
 //
 
 #if 0
@@ -679,7 +685,10 @@ static uint16_t nvme_get_feature(FemuCtrl *n, NvmeCmd *cmd, NvmeCqe *cqe)
         break;
     case NVME_REPORT_PECYCLE:
         reportPEcycle(&n->ssd->sp);
-        break;          
+        break;
+    case NVME_REPORT_WAF:
+        reportWAF();
+        break;                
     // 
     default:
         return NVME_INVALID_FIELD | NVME_DNR;
@@ -1033,6 +1042,8 @@ static uint16_t nvme_format(FemuCtrl *n, NvmeCmd *cmd)
 
     // HotStorage
     resetPEcycle(&n->ssd->sp);
+    host_write_bytes = 0;
+    data_write_bytes = 0;
     //
 
     return nvme_format_namespace(ns, lba_idx, meta_loc, pil, pi, sec_erase);

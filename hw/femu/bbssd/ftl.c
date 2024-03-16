@@ -5,6 +5,11 @@
 
 //#define FEMU_DEBUG_FTL
 
+// hotstorage
+uint64_t data_write_bytes = 0;
+uint64_t host_write_bytes = 0;
+//
+
 static void *ftl_thread(void *arg);
 
 static inline bool should_gc(struct ssd *ssd)
@@ -196,6 +201,7 @@ static void ssd_advance_write_pointer(struct ssd *ssd)
     detail_printf("AfterPE:(%ld)\n", get_PEcycle(ssd, wpp));
 
     check_addr(wpp->ch, spp->nchs);
+    
     wpp->ch++;
     if (wpp->ch == spp->nchs) {
         wpp->ch = 0;
@@ -686,6 +692,10 @@ static uint64_t gc_write_page(struct ssd *ssd, struct ppa *old_ppa)
 
     mark_page_valid(ssd, &new_ppa);
 
+    // hotstorage
+    data_write_bytes += (ssd->sp.secsz * ssd->sp.secs_per_pg);
+    //
+
     /* need to advance the write pointer here */
     ssd_advance_write_pointer(ssd);
 
@@ -886,6 +896,11 @@ static uint64_t ssd_write(struct ssd *ssd, NvmeRequest *req)
         set_rmap_ent(ssd, lpn, &ppa);
 
         mark_page_valid(ssd, &ppa);
+
+        // hotstorage
+        host_write_bytes += (ssd->sp.secsz * len);
+        data_write_bytes += (ssd->sp.secsz * len);
+        //
 
         /* need to advance the write pointer here */
         ssd_advance_write_pointer(ssd);
