@@ -30,8 +30,7 @@ We have used user-specific command sets for our added functions that comply the 
 5) Reset PE-cycle
    
     ``nvme set-feature /dev/nvme0n1 -f 0x84``
-   
-   (format-nvme command also resetting PE-cycle)
+
 
 
 7) Report WAF information
