@@ -5,7 +5,7 @@
 #define hotstorage_basic_log 1
 #define hotstorage_detailed_log 0
 
-#define hotstorage_gc_basic_log 1
+#define hotstorage_gc_basic_log 0
 #define hotstorage_gc_detail_log 0
 
 extern int *pecycle;
