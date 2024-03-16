@@ -1,3 +1,26 @@
+|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+
+[FEMU with PE-cycle Supported Version]
+1) How to print PE-cycle in a specific #blk
+  -> nvme get-feature command with [cdw10=0x82, cdw11=#blk]
+   
+3) How to Report PE-cycle
+  -> nvme get-feature command with [cdw10=0x83]
+   
+5) How to reset PE-cycle
+  -> nvme set-feature command with [cdw10=0x84]
+   (format-nvme command also resetting PE-cycle)
+
+[Print PE-cycle command]
+Print PE-cycle for a designated block
+
+[Report PE-cycle command]
+Supports three features: Average-Values/Maximum-Values/Minimum-Values
+Each max/min values are printed with according block number
+
+|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+
+
 [![FEMU Version](https://img.shields.io/badge/FEMU-v7.0-brightgreen)](https://img.shields.io/badge/FEMU-v7.0-brightgreen)
 [![Build Status](https://travis-ci.com/ucare-uchicago/FEMU.svg?branch=master)](https://travis-ci.com/ucare-uchicago/FEMU)
 [![License: GPL v2](https://img.shields.io/badge/License-GPL%20v2-blue.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html)
