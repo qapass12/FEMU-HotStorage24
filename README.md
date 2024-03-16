@@ -13,23 +13,37 @@
 
 ```
                               
-FEMU with PE-cycle Supported Version
+FEMU with PE-cycle & WAF Supported Version
 --------------------------
 
-1) How to print PE-cycle in a specific #blk
-  -> nvme get-feature command with [cdw10=0x82, cdw11=#blk]
+1) Print PE-cycle for a specific #blk
    
-3) How to report PE-cycle
-  -> nvme get-feature command with [cdw10=0x83]
+    ``nvme get-feature /dev/nvme0n1 -f 0x82 -c #blk``
+
    
-5) How to reset PE-cycle
-  -> nvme set-feature command with [cdw10=0x84]
+3) Report overall PE-cycle
+   
+     ``nvme get-feature /dev/nvme0n1 -f 0x83``
+
+   
+5) Reset PE-cycle
+   
+    ``nvme set-feature /dev/nvme0n1 -f 0x84``
+   
    (format-nvme command also resetting PE-cycle)
 
 
-- ``Print PE-cycle command`` Print PE-cycle for a designated block
+7) Report WAF information
+   
+     ``nvme get-feature /dev/nvme0n1 -f 0x85``
 
-- ``[Report PE-cycle command`` Supports three features: Average-Values/Maximum-Values/Minimum-Values. Each max/min values are printed with its block number
+   
+9) Reset WAF
+    
+     ``nvme set-feature /dev/nvme0n1 -f 0x86``
+   
+   (format-nvme command also resetting WAF)
+ 
 
 
 Contact Information
