@@ -26,14 +26,10 @@ FEMU with PE-cycle Supported Version
   -> nvme set-feature command with [cdw10=0x84]
    (format-nvme command also resetting PE-cycle)
 
-[Print PE-cycle command]
 
-Print PE-cycle for a designated block
+- ``Print PE-cycle command`` Print PE-cycle for a designated block
 
-[Report PE-cycle command]
-
-Supports three features: Average-Values/Maximum-Values/Minimum-Values
-Each max/min values are printed with according block number
+- ``[Report PE-cycle command`` Supports three features: Average-Values/Maximum-Values/Minimum-Values. Each max/min values are printed with according block number
 
 
 Contact Information
