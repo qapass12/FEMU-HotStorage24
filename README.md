@@ -29,7 +29,7 @@ FEMU with PE-cycle Supported Version
 
 - ``Print PE-cycle command`` Print PE-cycle for a designated block
 
-- ``[Report PE-cycle command`` Supports three features: Average-Values/Maximum-Values/Minimum-Values. Each max/min values are printed with according block number
+- ``[Report PE-cycle command`` Supports three features: Average-Values/Maximum-Values/Minimum-Values. Each max/min values are printed with its block number
 
 
 Contact Information
