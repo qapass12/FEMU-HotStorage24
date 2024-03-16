@@ -19,7 +19,7 @@ FEMU with PE-cycle Supported Version
 1) How to print PE-cycle in a specific #blk
   -> nvme get-feature command with [cdw10=0x82, cdw11=#blk]
    
-3) How to Report PE-cycle
+3) How to report PE-cycle
   -> nvme get-feature command with [cdw10=0x83]
    
 5) How to reset PE-cycle
