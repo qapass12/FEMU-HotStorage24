@@ -15,6 +15,7 @@
                               
 FEMU with PE-cycle & WAF Supported Version
 --------------------------
+We have used user-specific command sets for our added functions that comply the latest version of the NVMe Specification 2.0d standard.
 
 1) Print PE-cycle for a specific #blk
    
