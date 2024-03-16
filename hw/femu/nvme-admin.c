@@ -43,9 +43,9 @@ static void printPEcycle(struct ssdparams *spp, uint32_t blk) {
 }
 static void reportPEcycle(struct ssdparams *spp) {
     uint32_t max = pecycle[0];
-    uint32_t max_blk = 0;
+    uint64_t max_pg = 0;
     uint32_t min = pecycle[0];
-    uint32_t min_blk = 0;
+    uint64_t min_pg = 0;
     uint64_t tt = 0;
     float avg = 0;
 
@@ -53,19 +53,23 @@ static void reportPEcycle(struct ssdparams *spp) {
         if (pecycle[i] > max)
         {
             max = pecycle[i];
-            max_blk = i / spp->pgs_per_blk;
+            max_pg = i;
         }
         if (pecycle[i] < min)
         {
             min = pecycle[i];
-            min_blk = i / spp->pgs_per_blk;
+            min_pg = i;
         }
         tt += pecycle[i];
     }
     avg = (float)tt / (float)spp->tt_pgs;
     printf("avgPEcycle = %f\n", avg);
-    printf("maxPEcycle = %d (%d blk)\n", max, max_blk);
-    printf("minPEcycle = %d (%d blk)\n", min, min_blk);
+    printf("maxPEcycle = %d [%ldch][%ldlun][%ldpl][%ldblk][%ldpg]\n",
+        max, max_pg / spp->pgs_per_ch, max_pg % spp->pgs_per_ch / spp->pgs_per_lun, max_pg % spp->pgs_per_ch % spp->pgs_per_lun / spp->pgs_per_pl,
+        max_pg % spp->pgs_per_ch % spp->pgs_per_lun % spp->pgs_per_pl / spp->pgs_per_blk, max_pg % spp->pgs_per_ch % spp->pgs_per_lun % spp->pgs_per_pl % spp->pgs_per_blk);
+    printf("minPEcycle = %d [%ldch][%ldlun][%ldpl][%ldblk][%ldpg]\n",
+        min, min_pg / spp->pgs_per_ch, min_pg % spp->pgs_per_ch / spp->pgs_per_lun, min_pg % spp->pgs_per_ch % spp->pgs_per_lun / spp->pgs_per_pl,
+        min_pg % spp->pgs_per_ch % spp->pgs_per_lun % spp->pgs_per_pl / spp->pgs_per_blk, min_pg % spp->pgs_per_ch % spp->pgs_per_lun % spp->pgs_per_pl % spp->pgs_per_blk);
 }
 static void resetPEcycle(struct ssdparams *spp) {
     basic_printf("NVME_RESET_PECYCLE\n");

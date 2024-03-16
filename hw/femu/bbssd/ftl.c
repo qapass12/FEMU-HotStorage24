@@ -178,6 +178,7 @@ static void advance_PEcycle(struct ssd *ssd, struct write_pointer *wpp)
     struct ssdparams *spp = &ssd->sp;
 
     uint64_t page_address = physical_page_address_flattening(spp, wpp);
+    // printf("page_address %ld\n",page_address);
     pecycle[page_address]++;
 }
 static uint64_t get_PEcycle(struct ssd *ssd, struct write_pointer *wpp)
@@ -196,9 +197,11 @@ static void ssd_advance_write_pointer(struct ssd *ssd)
     struct write_pointer *wpp = &ssd->wp;
     struct line_mgmt *lm = &ssd->lm;
 
+    // hotstorage
     detail_printf("[ch%d][lun%d][pl%d][blk%d][pg%d] BeforePE:(%ld) / ", wpp->ch, wpp->lun, wpp->pl, wpp->blk, wpp->pg, get_PEcycle(ssd, wpp));
     advance_PEcycle(ssd, wpp);
     detail_printf("AfterPE:(%ld)\n", get_PEcycle(ssd, wpp));
+    // 
 
     check_addr(wpp->ch, spp->nchs);
     
@@ -237,6 +240,7 @@ static void ssd_advance_write_pointer(struct ssd *ssd)
                     abort();
                 }
                 wpp->blk = wpp->curline->id;
+                // printf("blk id:%d\n", wpp->blk);
                 check_addr(wpp->blk, spp->blks_per_pl);
                 /* make sure we are starting from page 0 in the super block */
                 ftl_assert(wpp->pg == 0);
@@ -279,7 +283,7 @@ static void ssd_init_params(struct ssdparams *spp)
 {
     spp->secsz = 512;
     spp->secs_per_pg = 8;
-    spp->pgs_per_blk = 256;
+    spp->pgs_per_blk = 1024;
     spp->blks_per_pl = 256; /* 16GB */
     spp->pls_per_lun = 1;
     spp->luns_per_ch = 8;
