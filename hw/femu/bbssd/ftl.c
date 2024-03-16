@@ -9,9 +9,6 @@
 //#define FEMU_DEBUG_FTL
 
 // hotstorage
-#define HOT_GC_GROUP 0
-#define COLD_GC_GROUP 1
-#define NO_GC_GROUP 12
 uint64_t data_write_bytes = 0;
 uint64_t host_write_bytes = 0;
 void gc_basic_printf(const char *format, ...) {
@@ -34,7 +31,7 @@ void gc_detail_printf(const char *format, ...) {
 }
 //
 // hotstorage-gc
-struct write_pointer gc_group_wpp[8] = {0,};
+struct write_pointer gc_group_wpp[NUM_GC_GROUP] = {0,};
 //
 
 static void *ftl_thread(void *arg);
@@ -195,7 +192,7 @@ static void ssd_init_write_pointer(struct ssd *ssd)
     wpp->pl = 0;
     // hotstorage-gc
     wpp->curline->gc_group_num = NO_GC_GROUP;
-    for(int i = 0; i <= 7; i++)
+    for(int i = 0; i <= NUM_GC_GROUP-1; i++)
     {
         gc_group_wpp[i].curline = get_next_free_line(ssd);
         gc_group_wpp[i].curline->gc_group_num = i;
@@ -740,9 +737,9 @@ static uint64_t gc_write_page(struct ssd *ssd, struct ppa *old_ppa)
     // hotstorage-gc
     struct write_pointer temp_pointer = ssd->wp;
     gc_detail_printf("GC origin groupnum(%d)\n", old_ppa->gc_info.group_num);
-    if(old_ppa->gc_info.group_num >= 7) old_ppa->gc_info.group_num = 7;
+    if(old_ppa->gc_info.group_num >= NUM_GC_GROUP) old_ppa->gc_info.group_num = NUM_GC_GROUP;
     else old_ppa->gc_info.group_num++;
-    ssd->wp = gc_group_wpp[old_ppa->gc_info.group_num];
+    ssd->wp = gc_group_wpp[old_ppa->gc_info.group_num - 1];
     gc_detail_printf("GCSaveWP: ch(%d) lun(%d) blk(%d) pg(%d)\n", temp_pointer.ch, temp_pointer.lun, temp_pointer.blk, temp_pointer.pg);
     gc_detail_printf("GCloadWP(%d) WP: ch(%d) lun(%d) blk(%d) pg(%d)\n", 
             old_ppa->gc_info.group_num, ssd->wp.ch, ssd->wp.lun, ssd->wp.blk, ssd->wp.pg);
@@ -975,14 +972,20 @@ static uint64_t ssd_write(struct ssd *ssd, NvmeRequest *req)
 
         //hotstorage-gc
         // gc_detail_printf("diff(%d)/accessfreq(%d)\n", diff_time, gc_access_freq);
-        if(diff_time <= gc_access_freq) ppa.gc_info.group_num = HOT_GC_GROUP;
-        else ppa.gc_info.group_num = COLD_GC_GROUP;                                          
-
-        temp_pointer = ssd->wp;
-        ssd->wp = gc_group_wpp[ppa.gc_info.group_num];
-        gc_detail_printf("SaveWP:ch(%d)lun(%d)blk(%d)pg(%d) ", temp_pointer.ch, temp_pointer.lun, temp_pointer.blk, temp_pointer.pg);
-        gc_detail_printf("load(%d)WP:ch(%d)lun(%d)blk(%d)pg(%d) ", 
-            ppa.gc_info.group_num, ssd->wp.ch, ssd->wp.lun, ssd->wp.blk, ssd->wp.pg);
+        if(diff_time <= gc_access_freq)
+        {
+            ppa.gc_info.group_num = HOT_GC_GROUP;
+            temp_pointer = ssd->wp;
+        }
+        else
+        {
+            ppa.gc_info.group_num = COLD_GC_GROUP;                                          
+            temp_pointer = ssd->wp;
+            ssd->wp = gc_group_wpp[ppa.gc_info.group_num];
+            gc_detail_printf("SaveWP:ch(%d)lun(%d)blk(%d)pg(%d) ", temp_pointer.ch, temp_pointer.lun, temp_pointer.blk, temp_pointer.pg);
+            gc_detail_printf("load(%d)WP:ch(%d)lun(%d)blk(%d)pg(%d) ", 
+                ppa.gc_info.group_num, ssd->wp.ch, ssd->wp.lun, ssd->wp.blk, ssd->wp.pg);
+        }
         //
 
         /* new write */

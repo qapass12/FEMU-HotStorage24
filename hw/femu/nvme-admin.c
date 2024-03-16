@@ -91,9 +91,9 @@ static void resetWAF(void) {
 //
 // hotstorage-gc
 static void reportGCLine(void){
-    for(int i=0; i <= 7; i++)
+    for(int i=0; i <= NUM_GC_GROUP-1; i++)
     {
-        printf("GC[%d]: ch(%d) lun(%d) blk(%d) pg(%d)\n", i, gc_group_wpp[i].ch, gc_group_wpp[i].lun, gc_group_wpp[i].blk, gc_group_wpp[i].pg);
+        printf("GCgroup[%d]: ch(%d) lun(%d) blk(%d) pg(%d)\n", i+1, gc_group_wpp[i].ch, gc_group_wpp[i].lun, gc_group_wpp[i].blk, gc_group_wpp[i].pg);
     }
 }
 // 
