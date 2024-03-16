@@ -77,7 +77,11 @@ static void reportWAF(void) {
     printf("host_write_bytes(%ld)\n", host_write_bytes);
     printf("data_write_bytes(%ld)\n", data_write_bytes);
     if(host_write_bytes == 0) printf("waf(NULL)\n");
-    else printf("waf(%ld)\n", data_write_bytes/host_write_bytes);
+    else printf("waf(%f)\n", (float)(data_write_bytes/host_write_bytes));
+}
+static void resetWAF(void) {
+    host_write_bytes = 0;
+    data_write_bytes = 0;
 }
 //
 
@@ -763,7 +767,10 @@ static uint16_t nvme_set_feature(FemuCtrl *n, NvmeCmd *cmd, NvmeCqe *cqe)
     // HotStorage
     case NVME_RESET_PECYCLE:
         resetPEcycle(&n->ssd->sp);
-        break;             
+        break;    
+    case NVME_RESET_WAF:
+        resetWAF();
+        break;                     
     //
     default:
         return NVME_INVALID_FIELD | NVME_DNR;
