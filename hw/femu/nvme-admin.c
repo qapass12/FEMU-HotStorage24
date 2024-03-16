@@ -77,9 +77,10 @@ static void reportWAF(void) {
     printf("host_write_bytes(%ld)\n", host_write_bytes);
     printf("data_write_bytes(%ld)\n", data_write_bytes);
     if(host_write_bytes == 0) printf("waf(NULL)\n");
-    else printf("waf(%f)\n", (float)(data_write_bytes/host_write_bytes));
+    else printf("waf(%f)\n", (float)data_write_bytes/(float)host_write_bytes);
 }
 static void resetWAF(void) {
+    basic_printf("Reset WAF\n");
     host_write_bytes = 0;
     data_write_bytes = 0;
 }
