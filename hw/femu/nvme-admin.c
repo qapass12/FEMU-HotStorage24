@@ -89,7 +89,14 @@ static void resetWAF(void) {
     data_write_bytes = 0;
 }
 //
-
+// hotstorage-gc
+static void reportGCLine(void){
+    for(int i=0; i <= 7; i++)
+    {
+        printf("GC[%d]: ch(%d) lun(%d) blk(%d) pg(%d)\n", i, gc_group_wpp[i].ch, gc_group_wpp[i].lun, gc_group_wpp[i].blk, gc_group_wpp[i].pg);
+    }
+}
+// 
 #if 0
 static const bool nvme_feature_support[NVME_FID_MAX] = {
     [NVME_ARBITRATION]              = true,
@@ -697,7 +704,10 @@ static uint16_t nvme_get_feature(FemuCtrl *n, NvmeCmd *cmd, NvmeCqe *cqe)
         break;
     case NVME_REPORT_WAF:
         reportWAF();
-        break;                
+        break;        
+    case NVME_REPORT_GC_LINE:
+        reportGCLine();
+        break;                     
     // 
     default:
         return NVME_INVALID_FIELD | NVME_DNR;

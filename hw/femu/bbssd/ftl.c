@@ -2,12 +2,39 @@
 // HotStorage
 #include "../variables.h"
 //
+// hotstorage-gc
+#include <time.h>
+//
 
 //#define FEMU_DEBUG_FTL
 
 // hotstorage
+#define HOT_GC_GROUP 0
+#define COLD_GC_GROUP 1
+#define NO_GC_GROUP 12
 uint64_t data_write_bytes = 0;
 uint64_t host_write_bytes = 0;
+void gc_basic_printf(const char *format, ...) {
+    if (hotstorage_gc_basic_log) {
+        va_list args;
+        va_start(args, format);
+        printf("[HotStorage] ");
+        vprintf(format, args);
+        va_end(args);
+    }
+}
+void gc_detail_printf(const char *format, ...) {
+    if (hotstorage_gc_detail_log) {
+        va_list args;
+        va_start(args, format);
+        printf("[HotStorage] ");
+        vprintf(format, args);
+        va_end(args);
+    }
+}
+//
+// hotstorage-gc
+struct write_pointer gc_group_wpp[8] = {0,};
 //
 
 static void *ftl_thread(void *arg);
@@ -31,6 +58,9 @@ static inline void set_maptbl_ent(struct ssd *ssd, uint64_t lpn, struct ppa *ppa
 {
     ftl_assert(lpn < ssd->sp.tt_pgs);
     ssd->maptbl[lpn] = *ppa;
+    // hotstorage-gc
+    ssd->maptbl[lpn].gc_info.last_accessed = time(NULL);
+    //
 }
 
 static uint64_t ppa2pgidx(struct ssd *ssd, struct ppa *ppa)
@@ -122,6 +152,30 @@ static void ssd_init_lines(struct ssd *ssd)
     lm->full_line_cnt = 0;
 }
 
+static inline void check_addr(int a, int max)
+{
+    ftl_assert(a >= 0 && a < max);
+}
+
+static struct line *get_next_free_line(struct ssd *ssd)
+{
+    struct line_mgmt *lm = &ssd->lm;
+    struct line *curline = NULL;
+
+    curline = QTAILQ_FIRST(&lm->free_line_list);
+    if (!curline) {
+        ftl_err("No free lines left in [%s] !!!!\n", ssd->ssdname);
+        return NULL;
+    }
+    // hotstorage-gc
+    curline->gc_group_num = NO_GC_GROUP;
+    //
+
+    QTAILQ_REMOVE(&lm->free_line_list, curline, entry);
+    lm->free_line_cnt--;
+    return curline;
+}
+
 static void ssd_init_write_pointer(struct ssd *ssd)
 {
     struct write_pointer *wpp = &ssd->wp;
@@ -139,27 +193,16 @@ static void ssd_init_write_pointer(struct ssd *ssd)
     wpp->pg = 0;
     wpp->blk = 0;
     wpp->pl = 0;
-}
-
-static inline void check_addr(int a, int max)
-{
-    ftl_assert(a >= 0 && a < max);
-}
-
-static struct line *get_next_free_line(struct ssd *ssd)
-{
-    struct line_mgmt *lm = &ssd->lm;
-    struct line *curline = NULL;
-
-    curline = QTAILQ_FIRST(&lm->free_line_list);
-    if (!curline) {
-        ftl_err("No free lines left in [%s] !!!!\n", ssd->ssdname);
-        return NULL;
+    // hotstorage-gc
+    wpp->curline->gc_group_num = NO_GC_GROUP;
+    for(int i = 0; i <= 7; i++)
+    {
+        gc_group_wpp[i].curline = get_next_free_line(ssd);
+        gc_group_wpp[i].curline->gc_group_num = i;
+        gc_group_wpp[i].blk = gc_group_wpp[i].curline->id;
+        gc_group_wpp[i].curline->gc_group_num = i;
     }
-
-    QTAILQ_REMOVE(&lm->free_line_list, curline, entry);
-    lm->free_line_cnt--;
-    return curline;
+    //
 }
 
 // HotStorage
@@ -263,6 +306,11 @@ static struct ppa get_new_page(struct ssd *ssd)
     ppa.g.pg = wpp->pg;
     ppa.g.blk = wpp->blk;
     ppa.g.pl = wpp->pl;
+
+    // hotstorage-gc
+    ppa.gc_info.group_num = wpp->curline->gc_group_num;
+    ppa.gc_info.last_accessed = time(NULL);
+    //
     ftl_assert(ppa.g.pl == 0);
 
     return ppa;
@@ -283,8 +331,8 @@ static void ssd_init_params(struct ssdparams *spp)
 {
     spp->secsz = 512;
     spp->secs_per_pg = 8;
-    spp->pgs_per_blk = 1024;
-    spp->blks_per_pl = 256; /* 16GB */
+    spp->pgs_per_blk = 1025;
+    spp->blks_per_pl = 256; /* 64GB */
     spp->pls_per_lun = 1;
     spp->luns_per_ch = 8;
     spp->nchs = 8;
@@ -607,6 +655,7 @@ static void mark_page_invalid(struct ssd *ssd, struct ppa *ppa)
         ftl_assert(line->ipc == 0);
         was_full_line = true;
     }
+
     line->ipc++;
     ftl_assert(line->vpc > 0 && line->vpc <= spp->pgs_per_line);
     /* Adjust the position of the victime line in the pq under over-writes */
@@ -688,6 +737,17 @@ static uint64_t gc_write_page(struct ssd *ssd, struct ppa *old_ppa)
     uint64_t lpn = get_rmap_ent(ssd, old_ppa);
 
     ftl_assert(valid_lpn(ssd, lpn));
+    // hotstorage-gc
+    struct write_pointer temp_pointer = ssd->wp;
+    gc_detail_printf("GC origin groupnum(%d)\n", old_ppa->gc_info.group_num);
+    if(old_ppa->gc_info.group_num >= 7) old_ppa->gc_info.group_num = 7;
+    else old_ppa->gc_info.group_num++;
+    ssd->wp = gc_group_wpp[old_ppa->gc_info.group_num];
+    gc_detail_printf("GCSaveWP: ch(%d) lun(%d) blk(%d) pg(%d)\n", temp_pointer.ch, temp_pointer.lun, temp_pointer.blk, temp_pointer.pg);
+    gc_detail_printf("GCloadWP(%d) WP: ch(%d) lun(%d) blk(%d) pg(%d)\n", 
+            old_ppa->gc_info.group_num, ssd->wp.ch, ssd->wp.lun, ssd->wp.blk, ssd->wp.pg);
+    //
+
     new_ppa = get_new_page(ssd);
     /* update maptbl */
     set_maptbl_ent(ssd, lpn, &new_ppa);
@@ -719,6 +779,13 @@ static uint64_t gc_write_page(struct ssd *ssd, struct ppa *old_ppa)
 
     new_lun = get_lun(ssd, &new_ppa);
     new_lun->gc_endtime = new_lun->next_lun_avail_time;
+
+    // hotstorage-gc
+    ssd->wp.curline->gc_group_num = old_ppa->gc_info.group_num;
+    gc_group_wpp[old_ppa->gc_info.group_num] = ssd->wp;
+    ssd->wp = temp_pointer;
+    gc_detail_printf("GCRecoverWP: ch(%d) lun(%d) blk(%d) pg(%d)\n", ssd->wp.ch, ssd->wp.lun, ssd->wp.blk, ssd->wp.pg);
+    //
 
     return 0;
 }
@@ -756,7 +823,6 @@ static void clean_one_block(struct ssd *ssd, struct ppa *ppa)
         ppa->g.pg = pg;
         pg_iter = get_pg(ssd, ppa);
         /* there shouldn't be any free page in victim blocks */
-        ftl_assert(pg_iter->status != PG_FREE);
         if (pg_iter->status == PG_VALID) {
             gc_read_page(ssd, ppa);
             /* delay the maptbl update until "write" happens */
@@ -789,10 +855,18 @@ static int do_gc(struct ssd *ssd, bool force)
 
     victim_line = select_victim_line(ssd, force);
     if (!victim_line) {
+        gc_detail_printf("no victim_line\n");
         return -1;
     }
 
     ppa.g.blk = victim_line->id;
+    // hotstorage-gc
+    gc_basic_printf("GC Occured!\n");
+    ppa.gc_info.group_num = victim_line->gc_group_num;
+    gc_detail_printf("GC-ing line:%d,ipc=%d,victim=%d,full=%d,free=%d gc_group_num(%d)\n", ppa.g.blk,
+              victim_line->ipc, ssd->lm.victim_line_cnt, ssd->lm.full_line_cnt,
+              ssd->lm.free_line_cnt, victim_line->gc_group_num);    
+    //
     ftl_debug("GC-ing line:%d,ipc=%d,victim=%d,full=%d,free=%d\n", ppa.g.blk,
               victim_line->ipc, ssd->lm.victim_line_cnt, ssd->lm.full_line_cnt,
               ssd->lm.free_line_cnt);
@@ -872,6 +946,10 @@ static uint64_t ssd_write(struct ssd *ssd, NvmeRequest *req)
     uint64_t lpn;
     uint64_t curlat = 0, maxlat = 0;
     int r;
+    // hotstorage-gc
+    struct write_pointer temp_pointer;
+    unsigned int diff_time;
+    //
 
     if (end_lpn >= spp->tt_pgs) {
         ftl_err("start_lpn=%"PRIu64",tt_pgs=%d\n", start_lpn, ssd->sp.tt_pgs);
@@ -886,15 +964,31 @@ static uint64_t ssd_write(struct ssd *ssd, NvmeRequest *req)
 
     for (lpn = start_lpn; lpn <= end_lpn; lpn++) {
         ppa = get_maptbl_ent(ssd, lpn);
+        // hotstorage-gc
+        diff_time = (unsigned int)difftime(time(NULL), ppa.gc_info.last_accessed);
+        //
         if (mapped_ppa(&ppa)) {
             /* update old page information first */
             mark_page_invalid(ssd, &ppa);
             set_rmap_ent(ssd, INVALID_LPN, &ppa);
         }
 
+        //hotstorage-gc
+        // gc_detail_printf("diff(%d)/accessfreq(%d)\n", diff_time, gc_access_freq);
+        if(diff_time <= gc_access_freq) ppa.gc_info.group_num = HOT_GC_GROUP;
+        else ppa.gc_info.group_num = COLD_GC_GROUP;                                          
+
+        temp_pointer = ssd->wp;
+        ssd->wp = gc_group_wpp[ppa.gc_info.group_num];
+        gc_detail_printf("SaveWP:ch(%d)lun(%d)blk(%d)pg(%d) ", temp_pointer.ch, temp_pointer.lun, temp_pointer.blk, temp_pointer.pg);
+        gc_detail_printf("load(%d)WP:ch(%d)lun(%d)blk(%d)pg(%d) ", 
+            ppa.gc_info.group_num, ssd->wp.ch, ssd->wp.lun, ssd->wp.blk, ssd->wp.pg);
+        //
+
         /* new write */
         ppa = get_new_page(ssd);
         /* update maptbl */
+    
         set_maptbl_ent(ssd, lpn, &ppa);
         /* update rmap */
         set_rmap_ent(ssd, lpn, &ppa);
@@ -916,6 +1010,13 @@ static uint64_t ssd_write(struct ssd *ssd, NvmeRequest *req)
         /* get latency statistics */
         curlat = ssd_advance_status(ssd, &ppa, &swr);
         maxlat = (curlat > maxlat) ? curlat : maxlat;
+
+        // hotstorage-gc
+        ssd->wp.curline->gc_group_num = ppa.gc_info.group_num;
+        gc_group_wpp[ppa.gc_info.group_num] = ssd->wp;
+        ssd->wp = temp_pointer;
+        gc_detail_printf("RecoverWP:ch(%d)lun(%d)blk(%d)pg(%d)\n", ssd->wp.ch, ssd->wp.lun, ssd->wp.blk, ssd->wp.pg);
+        //
     }
 
     return maxlat;

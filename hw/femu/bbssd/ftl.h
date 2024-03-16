@@ -58,6 +58,14 @@ enum {
 #define LUN_BITS    (8)
 #define CH_BITS     (7)
 
+// hotstorage-gc
+#define gc_access_freq  10
+struct gc_group {
+    uint16_t group_num;
+    time_t last_accessed;
+};
+//
+
 /* describe a physical page addr */
 struct ppa {
     union {
@@ -73,6 +81,9 @@ struct ppa {
 
         uint64_t ppa;
     };
+    // hotstorage-gc
+    struct gc_group gc_info;
+    //
 };
 
 typedef int nand_sec_status_t;
@@ -169,6 +180,9 @@ typedef struct line {
     QTAILQ_ENTRY(line) entry; /* in either {free,victim,full} list */
     /* position in the priority queue for victim lines */
     size_t                  pos;
+    //hotstorage-gc
+    uint16_t gc_group_num;
+    //
 } line;
 
 /* wp: record next write addr */
