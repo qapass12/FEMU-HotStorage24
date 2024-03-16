@@ -58,6 +58,7 @@ static void reportPEcycle(struct ssdparams *spp) {
     printf("minPEcycle = %d\n", min);
 }
 static void resetPEcycle(struct ssdparams *spp) {
+    basic_printf("NVME_RESET_PECYCLE\n");
     for (int i = 0; i < spp->tt_pgs; i++) {
         pecycle[i] = 0;
     }  
@@ -742,7 +743,6 @@ static uint16_t nvme_set_feature(FemuCtrl *n, NvmeCmd *cmd, NvmeCqe *cqe)
         break;
     // HotStorage
     case NVME_RESET_PECYCLE:
-        printf("NVME_RESET_PECYCLE\n");
         resetPEcycle(&n->ssd->sp);
         break;             
     //
@@ -1020,6 +1020,10 @@ static uint16_t nvme_format(FemuCtrl *n, NvmeCmd *cmd)
     }
 
     ns = &n->namespaces[nsid - 1];
+
+    // HotStorage
+    resetPEcycle(&n->ssd->sp);
+    //
 
     return nvme_format_namespace(ns, lba_idx, meta_loc, pil, pi, sec_erase);
 }
