@@ -62,7 +62,7 @@ static void reportPEcycle(struct ssdparams *spp) {
         }
         tt += pecycle[i];
     }
-    avg = tt / spp->tt_pgs;
+    avg = (float)tt / (float)spp->tt_pgs;
     printf("avgPEcycle = %f\n", avg);
     printf("maxPEcycle = %d (%d blk)\n", max, max_blk);
     printf("minPEcycle = %d (%d blk)\n", min, min_blk);
@@ -1049,7 +1049,6 @@ static uint16_t nvme_format(FemuCtrl *n, NvmeCmd *cmd)
     ns = &n->namespaces[nsid - 1];
 
     // HotStorage
-    resetPEcycle(&n->ssd->sp);
     host_write_bytes = 0;
     data_write_bytes = 0;
     //
