@@ -1,6 +1,9 @@
 {
     "files.associations": {
         "array": "c",
-        "nvme.h": "c"
+        "nvme.h": "c",
+        "variables.h": "c",
+        "ftl.h": "c",
+        "*.idef": "c"
     }
 }

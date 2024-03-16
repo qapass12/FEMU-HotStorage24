@@ -1,6 +1,8 @@
 #include "ftl.h"
 // HotStorage
 #include "../variables.h"
+//
+
 //#define FEMU_DEBUG_FTL
 
 static void *ftl_thread(void *arg);
@@ -180,15 +182,17 @@ static uint64_t get_PEcycle(struct ssd *ssd, struct write_pointer *wpp)
 
     return pecycle[page_address];
 }
+//
+
 static void ssd_advance_write_pointer(struct ssd *ssd)
 {
     struct ssdparams *spp = &ssd->sp;
     struct write_pointer *wpp = &ssd->wp;
     struct line_mgmt *lm = &ssd->lm;
 
-    printf("Before PEadvance: (%ld) / ", get_PEcycle(ssd, wpp));
+    detail_printf("[ch%d][lun%d][pl%d][blk%d][pg%d] BeforePE:(%ld) / ", wpp->ch, wpp->lun, wpp->pl, wpp->blk, wpp->pg, get_PEcycle(ssd, wpp));
     advance_PEcycle(ssd, wpp);
-    printf("After PEadvance: (%ld)\n", get_PEcycle(ssd, wpp));
+    detail_printf("AfterPE:(%ld)\n", get_PEcycle(ssd, wpp));
 
     check_addr(wpp->ch, spp->nchs);
     wpp->ch++;
@@ -292,13 +296,14 @@ static void ssd_init_params(struct ssdparams *spp)
     spp->tt_pgs = spp->pgs_per_ch * spp->nchs;
 
     // HotStorage
-    int *pecycle = (int *)malloc(spp->tt_pgs * sizeof(int));
+    pecycle = (int *)malloc(spp->tt_pgs * sizeof(int));
     if (pecycle == NULL) {
         ftl_err("pecycle allocation failed\n");
     }
     for (int i = 0; i < spp->tt_pgs; i++) {
         pecycle[i] = 0;
     }  
+    //
 
     spp->blks_per_lun = spp->blks_per_pl * spp->pls_per_lun;
     spp->blks_per_ch = spp->blks_per_lun * spp->luns_per_ch;

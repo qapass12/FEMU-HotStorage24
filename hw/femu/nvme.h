@@ -822,8 +822,10 @@ enum NvmeFeatureIds {
     NVME_TIMESTAMP                  = 0xe,
     NVME_SOFTWARE_PROGRESS_MARKER   = 0x80,
     // HotStorage
-    NVME_REPORT_PECYCLE             = 0x81,
-    NVME_RESET_PECYCLE              = 0x82,
+    NVME_PRINT_PECYCLE              = 0x82,
+    NVME_REPORT_PECYCLE             = 0x83,
+    NVME_RESET_PECYCLE              = 0x84,
+    //
     NVME_FID_MAX                    = 0x100
 };
 

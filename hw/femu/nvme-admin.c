@@ -6,19 +6,63 @@
 #include "bbssd/ftl.h"
 int *pecycle = NULL;
 // extern static void printPEcycle(struct ssdparams *spp);
-static void printPEcycle(struct ssdparams *spp) {
-    for (int i = 0; i < spp->tt_blks; i++) {
-        for (int j = 0; j < spp->pgs_per_blk; j++) {
-            printf("%d ", pecycle[i*spp->pgs_per_blk + j]);
-        }
+void basic_printf(const char *format, ...) {
+    if (hotstorage_basic_log) {
+        va_list args;
+        va_start(args, format);
+        printf("[HotStorage] ");
+        vprintf(format, args);
+        va_end(args);
     }
+}
+void detail_printf(const char *format, ...) {
+    if (hotstorage_detailed_log) {
+        va_list args;
+        va_start(args, format);
+        printf("[detailedLOG] ");
+        vprintf(format, args);
+        va_end(args);
+    }
+}
+static void printPEcycle(struct ssdparams *spp, uint32_t blk) {
+    basic_printf("Print PEcycle");
+
+    printf("BLK[%d]: ", blk);
+    for (int j = 0; j < spp->pgs_per_blk; j++) {
+        printf("%d ", pecycle[blk*spp->pgs_per_blk + j]);
+    }    
+
+    // for (int i = 0; i < spp->tt_blks; i++) {
+    //     printf("BLK[%d]: ", i);
+    //     for (int j = 0; j < spp->pgs_per_blk; j++) {
+    //         printf("%d ", pecycle[i*spp->pgs_per_blk + j]);
+    //     }
+    //     printf("\n");
+    // }
     printf("\n");
+}
+static void reportPEcycle(struct ssdparams *spp) {
+    uint32_t max = pecycle[0];
+    uint32_t min = pecycle[0];
+    uint64_t tt = 0;
+    float avg = 0;
+
+    for (int i = 0; i < spp->tt_pgs; i++) {
+        if (pecycle[i] > max) max = pecycle[i];
+        if (pecycle[i] < min) min = pecycle[i];
+        tt += pecycle[i];
+    }
+    avg = tt / spp->tt_pgs;
+    printf("avgPEcycle = %f\n", avg);
+    printf("maxPEcycle = %d\n", max);
+    printf("minPEcycle = %d\n", min);
 }
 static void resetPEcycle(struct ssdparams *spp) {
     for (int i = 0; i < spp->tt_pgs; i++) {
         pecycle[i] = 0;
     }  
 }
+//
 
 #if 0
 static const bool nvme_feature_support[NVME_FID_MAX] = {
@@ -619,9 +663,13 @@ static uint16_t nvme_get_feature(FemuCtrl *n, NvmeCmd *cmd, NvmeCqe *cqe)
         cqe->n.result = cpu_to_le32(n->features.sw_prog_marker);
         break;
     // HotStorage
+    case NVME_PRINT_PECYCLE:
+        printPEcycle(&n->ssd->sp, dw11);
+        break;
     case NVME_REPORT_PECYCLE:
-        printPEcycle(&n->ssd->sp);
-        break;        
+        reportPEcycle(&n->ssd->sp);
+        break;          
+    // 
     default:
         return NVME_INVALID_FIELD | NVME_DNR;
     }
@@ -694,8 +742,10 @@ static uint16_t nvme_set_feature(FemuCtrl *n, NvmeCmd *cmd, NvmeCqe *cqe)
         break;
     // HotStorage
     case NVME_RESET_PECYCLE:
+        printf("NVME_RESET_PECYCLE\n");
         resetPEcycle(&n->ssd->sp);
         break;             
+    //
     default:
         return NVME_INVALID_FIELD | NVME_DNR;
     }
