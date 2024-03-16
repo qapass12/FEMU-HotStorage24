@@ -1,6 +1,7 @@
-|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
+FEMU with PE-cycle Supported Version
+--------------------------|
 
-[FEMU with PE-cycle Supported Version]
+[]
 1) How to print PE-cycle in a specific #blk
   -> nvme get-feature command with [cdw10=0x82, cdw11=#blk]
    
@@ -18,7 +19,6 @@ Print PE-cycle for a designated block
 Supports three features: Average-Values/Maximum-Values/Minimum-Values
 Each max/min values are printed with according block number
 
-|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||
 
 
 [![FEMU Version](https://img.shields.io/badge/FEMU-v7.0-brightgreen)](https://img.shields.io/badge/FEMU-v7.0-brightgreen)
