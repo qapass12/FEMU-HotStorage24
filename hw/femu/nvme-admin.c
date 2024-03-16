@@ -43,19 +43,29 @@ static void printPEcycle(struct ssdparams *spp, uint32_t blk) {
 }
 static void reportPEcycle(struct ssdparams *spp) {
     uint32_t max = pecycle[0];
+    uint32_t max_blk = 0;
     uint32_t min = pecycle[0];
+    uint32_t min_blk = 0;
     uint64_t tt = 0;
     float avg = 0;
 
     for (int i = 0; i < spp->tt_pgs; i++) {
-        if (pecycle[i] > max) max = pecycle[i];
-        if (pecycle[i] < min) min = pecycle[i];
+        if (pecycle[i] > max)
+        {
+            max = pecycle[i];
+            max_blk = i / spp->pgs_per_blk;
+        }
+        if (pecycle[i] < min)
+        {
+            min = pecycle[i];
+            min_blk = i / spp->pgs_per_blk;
+        }
         tt += pecycle[i];
     }
     avg = tt / spp->tt_pgs;
     printf("avgPEcycle = %f\n", avg);
-    printf("maxPEcycle = %d\n", max);
-    printf("minPEcycle = %d\n", min);
+    printf("maxPEcycle = %d (%d blk)\n", max, max_blk);
+    printf("minPEcycle = %d (%d blk)\n", min, min_blk);
 }
 static void resetPEcycle(struct ssdparams *spp) {
     basic_printf("NVME_RESET_PECYCLE\n");

@@ -163,7 +163,8 @@ static uint64_t physical_page_address_flattening(struct ssdparams *spp, struct w
     uint64_t physical_page = (wpp->ch * spp->luns_per_ch * spp->pls_per_lun * spp->blks_per_pl * spp->pgs_per_blk) + \
                             (wpp->lun * spp->pls_per_lun * spp->blks_per_pl * spp->pgs_per_blk) + \
                             (wpp->pl * spp->blks_per_pl * spp->pgs_per_blk) + \
-                            (wpp->blk * spp->pgs_per_blk);
+                            (wpp->blk * spp->pgs_per_blk) + \
+                            wpp->pg;
 
     return physical_page;
 }
