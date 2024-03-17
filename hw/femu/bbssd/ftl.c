@@ -29,6 +29,16 @@ void gc_detail_printf(const char *format, ...) {
         va_end(args);
     }
 }
+// void gc_detail_printf(const char *format, ...) {
+//     if (hotstorage_gc_detail_log) {
+//         va_list args;
+//         va_start(args, format);
+//         printf("[HotStorage] ");
+//         vfprintf(stdout, format, args);
+//         printf("\r");
+//         va_end(args);
+//     }
+// }
 //
 // hotstorage-gc
 struct write_pointer gc_group_wpp[NUM_GC_GROUP] = {0,};
