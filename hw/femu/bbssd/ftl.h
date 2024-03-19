@@ -13,9 +13,9 @@ enum {
     NAND_ERASE = 2,
 
     // test
-    NAND_READ_LATENCY = 400,
-    NAND_PROG_LATENCY = 2000,
-    NAND_ERASE_LATENCY = 20000, 
+    NAND_READ_LATENCY = 4,
+    NAND_PROG_LATENCY = 20,
+    NAND_ERASE_LATENCY = 200, 
 
     //origin
     // NAND_READ_LATENCY = 40000,
