@@ -97,9 +97,11 @@ static void resetWAF(void) {
 static void reportGCLine(struct ssd *ssd){
     printf("\n\r");
     printf("NMgroup[0]: ch(%d) lun(%d) blk(%d) pg(%d)\n\r", ssd->wp.ch, ssd->wp.lun, ssd->wp.blk, ssd->wp.pg);
+    printf("NMGroup(0) pe(%ld) cap(%ld)\n\r", group_pecycle[0], group_capacity[0]);
     for(int i=0; i <= NUM_GC_GROUP-1; i++)
     {
         printf("GCgroup[%d]: ch(%d) lun(%d) blk(%d) pg(%d)\n\r", i+1, gc_group_wpp[i].ch, gc_group_wpp[i].lun, gc_group_wpp[i].blk, gc_group_wpp[i].pg);
+        printf("GCGroup(%d) pe(%ld) cap(%ld)\n\r", i+1, group_pecycle[i+1], group_capacity[i+1]);
     }
 }
 // 

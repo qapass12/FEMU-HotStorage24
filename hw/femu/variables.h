@@ -19,6 +19,8 @@ extern struct write_pointer gc_group_wpp[NUM_GC_GROUP];
 extern void gc_basic_printf(const char *format, ...);
 extern void gc_detail_printf(const char *format, ...);
 extern void gc_specific_printf(const char *format, ...);
+extern uint64_t group_pecycle[8];
+extern uint64_t group_capacity[8];
 //
 
 extern int *pecycle;

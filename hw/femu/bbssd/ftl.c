@@ -69,6 +69,8 @@ void gc_specific_printf(const char *format, ...) {
 //
 // hotstorage-gc
 struct write_pointer gc_group_wpp[NUM_GC_GROUP] = {0,};
+uint64_t group_pecycle[8] = {0,};
+uint64_t group_capacity[8] = {0,};
 //
 
 static void *ftl_thread(void *arg);
@@ -228,7 +230,7 @@ static void ssd_init_write_pointer(struct ssd *ssd)
     wpp->blk = 0;
     wpp->pl = 0;
     // hotstorage-gc
-    wpp->curline->gc_group_num = COLD_GC_GROUP;
+    wpp->curline->gc_group_num = HOT_GC_GROUP;
     for(int i = 0; i <= NUM_GC_GROUP-1; i++)
     {
         gc_group_wpp[i].curline = get_next_free_line(ssd);
@@ -256,6 +258,10 @@ static void advance_PEcycle(struct ssd *ssd, struct write_pointer *wpp)
     uint64_t page_address = physical_page_address_flattening(spp, wpp);
     // printf("page_address %ld\n",page_address);
     pecycle[page_address]++;
+    // hotstorage-gc
+    group_pecycle[ssd->wp.curline->gc_group_num]++;
+    group_capacity[ssd->wp.curline->gc_group_num]++;
+    //
 }
 static uint64_t get_PEcycle(struct ssd *ssd, struct write_pointer *wpp)
 {
@@ -373,8 +379,8 @@ static void ssd_init_params(struct ssdparams *spp)
 {
     spp->secsz = 512;
     spp->secs_per_pg = 8;
-    spp->pgs_per_blk = 64; //256KB block
-    spp->blks_per_pl = 4196; /* 4096 + provisioning = 64GB */
+    spp->pgs_per_blk = 1024; //4MB block
+    spp->blks_per_pl = 300; /* 256+ provisioning = 64GB */
     spp->pls_per_lun = 1;
     spp->luns_per_ch = 8;
     spp->nchs = 8;
@@ -873,6 +879,7 @@ static void clean_one_block(struct ssd *ssd, struct ppa *ppa)
             gc_write_page(ssd, ppa);
             cnt++;
         }
+        group_capacity[ppa->gc_info.group_num]--;
     }
 
     ftl_assert(get_blk(ssd, ppa)->vpc == cnt);
@@ -915,6 +922,11 @@ static int do_gc(struct ssd *ssd, bool force)
               victim_line->ipc, ssd->lm.victim_line_cnt, ssd->lm.full_line_cnt,
               ssd->lm.free_line_cnt, spp->pgs_per_blk);
 
+    for(int i =0; i < NUM_GC_GROUP; i++)
+    {
+        gc_specific_printf("BeforeGC group(%d) pe(%ld) cap(%ld)\n\r", i, group_pecycle[i], group_capacity[i]);
+    }
+
     /* copy back valid data */
     for (ch = 0; ch < spp->nchs; ch++) {
         for (lun = 0; lun < spp->luns_per_ch; lun++) {
@@ -935,6 +947,10 @@ static int do_gc(struct ssd *ssd, bool force)
 
             lunp->gc_endtime = lunp->next_lun_avail_time;
         }
+    }
+    for(int i =0; i < NUM_GC_GROUP; i++)
+    {
+        gc_specific_printf("AfterGC group(%d) pe(%ld) cap(%ld)\n\r", i, group_pecycle[i], group_capacity[i]);
     }
 
     /* update line status */
