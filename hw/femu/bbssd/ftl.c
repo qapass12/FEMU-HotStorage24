@@ -71,6 +71,7 @@ void gc_specific_printf(const char *format, ...) {
 struct write_pointer gc_group_wpp[NUM_GC_GROUP] = {0,};
 uint64_t group_pecycle[8] = {0,};
 uint64_t group_capacity[8] = {0,};
+uint64_t num_buffer = 0;
 //
 
 static void *ftl_thread(void *arg);
@@ -231,10 +232,12 @@ static void ssd_init_write_pointer(struct ssd *ssd)
     wpp->pl = 0;
     // hotstorage-gc
     wpp->curline->gc_group_num = HOT_GC_GROUP;
+    wpp->curline->gc_buffer = false;
     for(int i = 0; i <= NUM_GC_GROUP-1; i++)
     {
         gc_group_wpp[i].curline = get_next_free_line(ssd);
         gc_group_wpp[i].curline->gc_group_num = i+1;
+        gc_group_wpp[i].curline->gc_buffer = false;
         gc_group_wpp[i].blk = gc_group_wpp[i].curline->id;
     }
     //
@@ -257,10 +260,13 @@ static void advance_PEcycle(struct ssd *ssd, struct write_pointer *wpp)
 
     uint64_t page_address = physical_page_address_flattening(spp, wpp);
     // printf("page_address %ld\n",page_address);
-    pecycle[page_address]++;
+    if(!wpp->curline->gc_buffer)
+    {
+        pecycle[page_address]++;
     // hotstorage-gc
-    group_pecycle[ssd->wp.curline->gc_group_num]++;
-    group_capacity[ssd->wp.curline->gc_group_num]++;
+        group_pecycle[ssd->wp.curline->gc_group_num]++;
+        group_capacity[ssd->wp.curline->gc_group_num]++;
+    }
     //
 }
 static uint64_t get_PEcycle(struct ssd *ssd, struct write_pointer *wpp)
@@ -358,6 +364,7 @@ static struct ppa get_new_page(struct ssd *ssd)
     // hotstorage-gc
     ppa.gc_info.group_num = wpp->curline->gc_group_num;
     ppa.gc_info.last_accessed = time(NULL);
+    ppa.gc_info.buffer = false;
     //
     ftl_assert(ppa.g.pl == 0);
 
@@ -427,9 +434,9 @@ static void ssd_init_params(struct ssdparams *spp)
     spp->secs_per_line = spp->pgs_per_line * spp->secs_per_pg;
     spp->tt_lines = spp->blks_per_lun; /* TODO: to fix under multiplanes */
 
-    spp->gc_thres_pcent = 0.10;
+    spp->gc_thres_pcent = 0.05;
     spp->gc_thres_lines = (int)((1 - spp->gc_thres_pcent) * spp->tt_lines);
-    spp->gc_thres_pcent_high = 0.20;
+    spp->gc_thres_pcent_high = 0.10;
     spp->gc_thres_lines_high = (int)((1 - spp->gc_thres_pcent_high) * spp->tt_lines);
     spp->enable_gc_delay = true;
 
@@ -618,9 +625,19 @@ static uint64_t ssd_advance_status(struct ssd *ssd, struct ppa *ppa, struct
     case NAND_READ:
         /* read: perform NAND cmd first */
         nand_stime = (lun->next_lun_avail_time < cmd_stime) ? cmd_stime : \
-                     lun->next_lun_avail_time;
+                     lun->next_lun_avail_time;        
+        // hotstorage-gc
+        if(ppa->gc_info.buffer)
+        {
+        lun->next_lun_avail_time = nand_stime + spp->pg_rd_lat/100;
+        lat = lun->next_lun_avail_time - cmd_stime;
+        }
+        else
+        {
+        //
         lun->next_lun_avail_time = nand_stime + spp->pg_rd_lat;
         lat = lun->next_lun_avail_time - cmd_stime;
+        }
 #if 0
         lun->next_lun_avail_time = nand_stime + spp->pg_rd_lat;
 
@@ -636,13 +653,28 @@ static uint64_t ssd_advance_status(struct ssd *ssd, struct ppa *ppa, struct
     case NAND_WRITE:
         /* write: transfer data through channel first */
         nand_stime = (lun->next_lun_avail_time < cmd_stime) ? cmd_stime : \
-                     lun->next_lun_avail_time;
+                     lun->next_lun_avail_time;    
+        // hotstorage-gc
+        if(ppa->gc_info.buffer)
+        {
+        if (ncmd->type == USER_IO) {
+            lun->next_lun_avail_time = nand_stime + spp->pg_wr_lat/100;
+        } else {
+            lun->next_lun_avail_time = nand_stime + spp->pg_wr_lat/100;
+        }
+        lat = lun->next_lun_avail_time - cmd_stime;
+        }
+        else
+        {
+        //    
+
         if (ncmd->type == USER_IO) {
             lun->next_lun_avail_time = nand_stime + spp->pg_wr_lat;
         } else {
             lun->next_lun_avail_time = nand_stime + spp->pg_wr_lat;
         }
         lat = lun->next_lun_avail_time - cmd_stime;
+        }
 
 #if 0
         chnl_stime = (ch->next_ch_avail_time < cmd_stime) ? cmd_stime : \
@@ -661,11 +693,21 @@ static uint64_t ssd_advance_status(struct ssd *ssd, struct ppa *ppa, struct
     case NAND_ERASE:
         /* erase: only need to advance NAND status */
         nand_stime = (lun->next_lun_avail_time < cmd_stime) ? cmd_stime : \
-                     lun->next_lun_avail_time;
+                     lun->next_lun_avail_time;    
+        // hotstorage-gc
+        if(ppa->gc_info.buffer)
+        {
+        lun->next_lun_avail_time = nand_stime + spp->blk_er_lat/100;
+        lat = lun->next_lun_avail_time - cmd_stime/100;
+        }
+        else
+        {
+        //       
         lun->next_lun_avail_time = nand_stime + spp->blk_er_lat;
-
         lat = lun->next_lun_avail_time - cmd_stime;
+        }
         break;
+
 
     default:
         ftl_err("Unsupported NAND command: 0x%x\n", c);
@@ -810,6 +852,14 @@ static uint64_t gc_write_page(struct ssd *ssd, struct ppa *old_ppa)
     // hotstorage
     data_write_bytes += (ssd->sp.secsz * ssd->sp.secs_per_pg);
     //
+    // hotstorage-gc
+    if(num_buffer < BUFFER_SIZE_PG && old_ppa->gc_info.group_num == 0)
+    {
+        new_ppa.gc_info.buffer = true;
+        num_buffer++; // 5% of capacity
+        ssd->wp.curline->gc_buffer = true;
+    }
+    //
 
     /* need to advance the write pointer here */
     ssd_advance_write_pointer(ssd);
@@ -847,10 +897,12 @@ static struct line *select_victim_line(struct ssd *ssd, bool force)
 
     victim_line = pqueue_peek(lm->victim_line_pq);
     if (!victim_line) {
+        wr_detail_printf("no victim line in pqueue\n\r");
         return NULL;
     }
 
     if (!force && victim_line->ipc < ssd->sp.pgs_per_line / 8) {
+        wr_detail_printf("too few invalid page(%d) in victim line\n\r", victim_line->ipc);
         return NULL;
     }
 
@@ -879,7 +931,16 @@ static void clean_one_block(struct ssd *ssd, struct ppa *ppa)
             gc_write_page(ssd, ppa);
             cnt++;
         }
-        group_capacity[ppa->gc_info.group_num]--;
+        //hotstorage-gc
+        if(ppa->gc_info.buffer)
+        {
+            num_buffer--;
+        }
+        else
+        {
+            group_capacity[ppa->gc_info.group_num]--;
+        }
+        //
     }
 
     ftl_assert(get_blk(ssd, ppa)->vpc == cnt);
@@ -912,7 +973,8 @@ static int do_gc(struct ssd *ssd, bool force)
 
     ppa.g.blk = victim_line->id;
     // hotstorage-gc
-    gc_basic_printf("GC Occured!\n\r");
+    wr_detail_printf("GC Occured!\n\r");
+    ppa.gc_info.buffer = victim_line->gc_buffer;
     ppa.gc_info.group_num = victim_line->gc_group_num;
     gc_detail_printf("GC-ing line:%d,ipc=%d,vpc=%d,victim=%d,full=%d,free=%d,gc_group_num(%d),pgs_per_blk(%d)\n\r", ppa.g.blk,
               victim_line->ipc, victim_line->vpc, ssd->lm.victim_line_cnt, ssd->lm.full_line_cnt,
@@ -1005,7 +1067,7 @@ static uint64_t ssd_write(struct ssd *ssd, NvmeRequest *req)
     struct ppa ppa;
     uint64_t lpn;
     uint64_t curlat = 0, maxlat = 0;
-    // int r;
+    int r;
     // hotstorage-gc
     struct write_pointer temp_pointer;
     unsigned int diff_time;
@@ -1015,11 +1077,14 @@ static uint64_t ssd_write(struct ssd *ssd, NvmeRequest *req)
         ftl_err("start_lpn=%"PRIu64",tt_pgs=%d\n", start_lpn, ssd->sp.tt_pgs);
     }
 
-    while (should_gc_high(ssd)) {
+    // while (should_gc_high(ssd)) {
+    while (should_gc_high(ssd)) {        
         /* perform GC here until !should_gc(ssd) */
-        do_gc(ssd, true);
-        // if (r == -1)
-        //     break;
+        detail_printf("should_gc_high: ");
+        r = do_gc(ssd, true);
+        detail_printf("GC Success!\n\r");
+        if (r == -1)
+             break;
     }
 
     for (lpn = start_lpn; lpn <= end_lpn; lpn++) {
@@ -1051,6 +1116,12 @@ static uint64_t ssd_write(struct ssd *ssd, NvmeRequest *req)
             ppa = get_new_page(ssd);
             /* update maptbl */                
             ppa.gc_info.group_num = COLD_GC_GROUP;
+            if(num_buffer < BUFFER_SIZE_PG)
+            {
+                ppa.gc_info.buffer = true;
+                num_buffer++; // 5% of capacity
+                ssd->wp.curline->gc_buffer = true;
+            }
             wr_detail_printf("SaveWP:ch(%d)lun(%d)blk(%d)pg(%d) ", temp_pointer.ch, temp_pointer.lun, temp_pointer.blk, temp_pointer.pg);
             wr_detail_printf("load(%d)WP:ch(%d)lun(%d)blk(%d)pg(%d) ", 
                 ppa.gc_info.group_num, ssd->wp.ch, ssd->wp.lun, ssd->wp.blk, ssd->wp.pg);            

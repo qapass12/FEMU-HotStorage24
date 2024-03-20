@@ -12,15 +12,15 @@ enum {
     NAND_WRITE = 1,
     NAND_ERASE = 2,
 
-    // test
-    NAND_READ_LATENCY = 4,
-    NAND_PROG_LATENCY = 20,
-    NAND_ERASE_LATENCY = 200, 
+    //test
+    // NAND_READ_LATENCY = 400,
+    // NAND_PROG_LATENCY = 2000,
+    // NAND_ERASE_LATENCY = 20000,      
 
     //origin
-    // NAND_READ_LATENCY = 40000,
-    // NAND_PROG_LATENCY = 200000,
-    // NAND_ERASE_LATENCY = 2000000,     
+    NAND_READ_LATENCY = 40000,
+    NAND_PROG_LATENCY = 200000,
+    NAND_ERASE_LATENCY = 2000000,     
 };
 
 enum {
@@ -59,9 +59,10 @@ enum {
 #define CH_BITS     (7)
 
 // hotstorage-gc
-#define gc_access_freq  10
+#define gc_access_freq  240
 struct gc_group {
     uint16_t group_num;
+    bool buffer;
     time_t last_accessed;
 };
 //
@@ -182,6 +183,7 @@ typedef struct line {
     size_t                  pos;
     //hotstorage-gc
     uint16_t gc_group_num;
+    bool gc_buffer;
     //
 } line;
 
@@ -255,3 +257,4 @@ void ssd_init(FemuCtrl *n);
 #endif
 
 #endif
+
