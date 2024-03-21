@@ -853,11 +853,14 @@ static uint64_t gc_write_page(struct ssd *ssd, struct ppa *old_ppa)
     data_write_bytes += (ssd->sp.secsz * ssd->sp.secs_per_pg);
     //
     // hotstorage-gc
-    if(num_buffer < BUFFER_SIZE_PG && old_ppa->gc_info.group_num == 0)
+    if(buffer_group==1) //buffer for g1
     {
-        new_ppa.gc_info.buffer = true;
-        num_buffer++; // 5% of capacity
-        ssd->wp.curline->gc_buffer = true;
+        if(num_buffer < BUFFER_SIZE_PG && old_ppa->gc_info.group_num == 0)
+        {
+            new_ppa.gc_info.buffer = true;
+            num_buffer++; // 5% of capacity
+            ssd->wp.curline->gc_buffer = true;
+        }
     }
     //
 
@@ -1106,6 +1109,12 @@ static uint64_t ssd_write(struct ssd *ssd, NvmeRequest *req)
             /* new write */
             ppa = get_new_page(ssd);
             ppa.gc_info.group_num = HOT_GC_GROUP;
+            if(buffer_group==0 && (num_buffer < BUFFER_SIZE_PG))
+            {
+                ppa.gc_info.buffer = true;
+                num_buffer++; // 5% of capacity
+                ssd->wp.curline->gc_buffer = true;
+            }            
             /* update maptbl */            
         }
         else
@@ -1116,12 +1125,13 @@ static uint64_t ssd_write(struct ssd *ssd, NvmeRequest *req)
             ppa = get_new_page(ssd);
             /* update maptbl */                
             ppa.gc_info.group_num = COLD_GC_GROUP;
-            if(num_buffer < BUFFER_SIZE_PG)
+            if(buffer_group==1 && (num_buffer < BUFFER_SIZE_PG))
             {
                 ppa.gc_info.buffer = true;
                 num_buffer++; // 5% of capacity
                 ssd->wp.curline->gc_buffer = true;
-            }
+            }                
+
             wr_detail_printf("SaveWP:ch(%d)lun(%d)blk(%d)pg(%d) ", temp_pointer.ch, temp_pointer.lun, temp_pointer.blk, temp_pointer.pg);
             wr_detail_printf("load(%d)WP:ch(%d)lun(%d)blk(%d)pg(%d) ", 
                 ppa.gc_info.group_num, ssd->wp.ch, ssd->wp.lun, ssd->wp.blk, ssd->wp.pg);            
