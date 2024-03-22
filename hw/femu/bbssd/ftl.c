@@ -853,7 +853,7 @@ static uint64_t gc_write_page(struct ssd *ssd, struct ppa *old_ppa)
     data_write_bytes += (ssd->sp.secsz * ssd->sp.secs_per_pg);
     //
     // hotstorage-gc
-    if(buffer_group==1) //buffer for g1
+    if(buffer_group==1) //buffer for hot->g1
     {
         if(num_buffer < BUFFER_SIZE_PG && old_ppa->gc_info.group_num == 0)
         {
