@@ -9,8 +9,12 @@
 //#define FEMU_DEBUG_FTL
 
 // hotstorage
-uint64_t data_write_bytes = 0;
-uint64_t host_write_bytes = 0;
+uint64_t data_write_page = 0;
+uint64_t host_write_page = 0;
+// Uint256_t data_write_page;
+// Uint256_t host_write_page;
+uint64_t num_collect = 0;
+float current_waf = 1;
 void wr_basic_printf(const char *format, ...) {
     if (hotstorage_wr_basic_log) {
         va_list args;
@@ -56,15 +60,33 @@ void gc_specific_printf(const char *format, ...) {
         va_end(args);
     }
 }
-// void gc_detail_printf(const char *format, ...) {
-//     if (hotstorage_gc_detail_log) {
-//         va_list args;
-//         va_start(args, format);
-//         printf("[HotStorage] ");
-//         vfprintf(stdout, format, args);
-//         printf("\r");
-//         va_end(args);
+// void initUint256(Uint256_t *value) {
+//     value->low = 0;
+//     value->lowmid = 0;
+//     value->highmid = 0;
+//     value->high = 0;
+// }
+// void addUint256(Uint256_t *value, uint64_t addValue) {
+//     uint64_t prevLow = value->low;
+//     value->low += addValue;
+//     if (value->low < prevLow) {
+//         if (++value->lowmid == 0) {
+//             if (++value->highmid == 0) {
+//                 if (++value->high == 0){
+//                     collect_waf();
+//                 }
+//             }
+//         }
 //     }
+// }
+// void printUint256(const Uint256_t *value) {
+//     printf("(Uint256_t) %lu %lu %lu %lu\n\r", value->high, value->highmid, value->lowmid, value->low);
+// }
+// void collect_waf(void){
+//     printf("beforewaf(%f)%ld %ld %f ", current_waf, data_write_page, host_write_page, ((float)data_write_page / (float)host_write_page) / ((float)num_collect+1));
+//     current_waf = ((current_waf*num_collect) + ((float)data_write_page / (float)host_write_page)) / ((float)num_collect+1);
+//     printf("afterwaf(%f)\n\r", current_waf);
+//     num_collect++;
 // }
 //
 // hotstorage-gc
@@ -72,6 +94,7 @@ struct write_pointer gc_group_wpp[NUM_GC_GROUP] = {0,};
 uint64_t group_pecycle[8] = {0,};
 uint64_t group_capacity[8] = {0,};
 uint64_t num_buffer = 0;
+uint32_t last_self_replication = 0;
 //
 
 static void *ftl_thread(void *arg);
@@ -265,8 +288,8 @@ static void advance_PEcycle(struct ssd *ssd, struct write_pointer *wpp)
         pecycle[page_address]++;
     // hotstorage-gc
         group_pecycle[ssd->wp.curline->gc_group_num]++;
-        group_capacity[ssd->wp.curline->gc_group_num]++;
     }
+    group_capacity[ssd->wp.curline->gc_group_num]++;
     //
 }
 static uint64_t get_PEcycle(struct ssd *ssd, struct write_pointer *wpp)
@@ -386,11 +409,11 @@ static void ssd_init_params(struct ssdparams *spp)
 {
     spp->secsz = 512;
     spp->secs_per_pg = 8;
-    spp->pgs_per_blk = 1024; //4MB block
-    spp->blks_per_pl = 300; /* 256+ provisioning = 64GB */
+    spp->pgs_per_blk = 256; //1MB block
+    spp->blks_per_pl = 4196; /* 4096 + provisioning = 64GB */
     spp->pls_per_lun = 1;
-    spp->luns_per_ch = 8;
-    spp->nchs = 8;
+    spp->luns_per_ch = 4;
+    spp->nchs = 4;
 
     spp->pg_rd_lat = NAND_READ_LATENCY;
     spp->pg_wr_lat = NAND_PROG_LATENCY;
@@ -440,6 +463,10 @@ static void ssd_init_params(struct ssdparams *spp)
     spp->gc_thres_lines_high = (int)((1 - spp->gc_thres_pcent_high) * spp->tt_lines);
     spp->enable_gc_delay = true;
 
+    // hotstorage-gc
+    // initUint256(&data_write_page);
+    // initUint256(&host_write_page);
+    // 
     check_params(spp);
 }
 
@@ -832,6 +859,7 @@ static uint64_t gc_write_page(struct ssd *ssd, struct ppa *old_ppa)
 
     ftl_assert(valid_lpn(ssd, lpn));
     // hotstorage-gc
+    // uint64_t prev_data_write_page;
     struct write_pointer temp_pointer = ssd->wp;
     gc_specific_printf("GC origin groupnum(%d)\n", old_ppa->gc_info.group_num);
     if(old_ppa->gc_info.group_num >= NUM_GC_GROUP) ssd->wp = gc_group_wpp[NUM_GC_GROUP-1];
@@ -849,19 +877,49 @@ static uint64_t gc_write_page(struct ssd *ssd, struct ppa *old_ppa)
 
     mark_page_valid(ssd, &new_ppa);
 
-    // hotstorage
-    data_write_bytes += (ssd->sp.secsz * ssd->sp.secs_per_pg);
-    //
     // hotstorage-gc
-    if(buffer_group==1) //buffer for hot->g1
+    int temp_buf = buffer_group-1;
+    if(buffer_group != 0) //buffer from g-high->g-low / buffer_g0=hot / buffer_g1=g1 / buffer_g2=g2 / buffer_g3=g3
     {
-        if(num_buffer < BUFFER_SIZE_PG && old_ppa->gc_info.group_num == 0)
+        if(num_buffer < BUFFER_SIZE_PG && old_ppa->gc_info.group_num == temp_buf)
         {
             new_ppa.gc_info.buffer = true;
             num_buffer++; // 5% of capacity
             ssd->wp.curline->gc_buffer = true;
         }
+        else
+        {
+            // hotstorage
+            // prev_data_write_page = data_write_page;
+            data_write_page++;
+            //if (data_write_page < prev_data_write_page) {
+            // if(data_write_page > 1800000000000){
+            //     collect_waf();
+            //     data_write_page = 0;
+            //     host_write_page = 0;
+            // }           
+            //addUint256(&data_write_page, 1);
+            //
+        }
     }
+    else
+    {
+        // hotstorage
+        // prev_data_write_page = data_write_page;
+        data_write_page++;
+        // if (data_write_page < prev_data_write_page) {
+        // if(data_write_page > 1800000000000){            
+        //     collect_waf();
+        //     data_write_page = 0;
+        //     host_write_page = 0;
+        // }         
+        //addUint256(&data_write_page, 1);
+        //
+    }
+    if(old_ppa->gc_info.group_num == NUM_GC_GROUP)
+    {
+        last_self_replication++;
+    }    
     //
 
     /* need to advance the write pointer here */
@@ -939,10 +997,7 @@ static void clean_one_block(struct ssd *ssd, struct ppa *ppa)
         {
             num_buffer--;
         }
-        else
-        {
-            group_capacity[ppa->gc_info.group_num]--;
-        }
+        group_capacity[ppa->gc_info.group_num]--;
         //
     }
 
@@ -1072,6 +1127,7 @@ static uint64_t ssd_write(struct ssd *ssd, NvmeRequest *req)
     uint64_t curlat = 0, maxlat = 0;
     int r;
     // hotstorage-gc
+    // uint64_t prev_data_write_page;
     struct write_pointer temp_pointer;
     unsigned int diff_time;
     //
@@ -1102,14 +1158,14 @@ static uint64_t ssd_write(struct ssd *ssd, NvmeRequest *req)
         }
 
         //hotstorage-gc
-        // gc_detail_printf("diff(%d)/accessfreq(%d)\n", diff_time, gc_access_freq);
-        if(diff_time <= gc_access_freq)
+        // gc_detail_printf("diff(%d)/accessfreq(%d)\n", diff_time, GC_HOT_LATENCY);
+        if(diff_time <= GC_HOT_LATENCY)
         {
             temp_pointer = ssd->wp;
             /* new write */
             ppa = get_new_page(ssd);
             ppa.gc_info.group_num = HOT_GC_GROUP;
-            if(buffer_group==0 && (num_buffer < BUFFER_SIZE_PG))
+            if(buffer_group==0 && (num_buffer < BUFFER_SIZE_PG)) // data to hot
             {
                 ppa.gc_info.buffer = true;
                 num_buffer++; // 5% of capacity
@@ -1125,7 +1181,7 @@ static uint64_t ssd_write(struct ssd *ssd, NvmeRequest *req)
             ppa = get_new_page(ssd);
             /* update maptbl */                
             ppa.gc_info.group_num = COLD_GC_GROUP;
-            if(buffer_group==1 && (num_buffer < BUFFER_SIZE_PG))
+            if(buffer_group == 1 && (num_buffer < BUFFER_SIZE_PG)) // data to g0
             {
                 ppa.gc_info.buffer = true;
                 num_buffer++; // 5% of capacity
@@ -1144,9 +1200,16 @@ static uint64_t ssd_write(struct ssd *ssd, NvmeRequest *req)
 
         mark_page_valid(ssd, &ppa);
 
-        // hotstorage
-        host_write_bytes += (ssd->sp.secsz * len);
-        data_write_bytes += (ssd->sp.secsz * len);
+        // hotstorage      
+        host_write_page++;
+        data_write_page++;
+        if(host_write_page > data_write_page)
+        {
+            printf("host_write_page:%ld\n\r", host_write_page);
+            printf("data_write_page:%ld\n\r", data_write_page);
+
+            assert(host_write_page <= data_write_page);
+        }                
         //
 
         /* need to advance the write pointer here */
@@ -1169,6 +1232,18 @@ static uint64_t ssd_write(struct ssd *ssd, NvmeRequest *req)
         }
         //
     }
+    // hotstorage
+    if(host_write_page > 0)
+    {
+        uint64_t prev_num_collect = num_collect;
+        current_waf = ((current_waf*num_collect) + ((float)data_write_page / (float)host_write_page)) / ((float)num_collect+1);
+        num_collect++;
+        assert(num_collect > prev_num_collect); //check overflow
+        assert(data_write_page >= host_write_page);
+        data_write_page = 0;
+        host_write_page = 0;
+    }
+    //
 
     return maxlat;
 }

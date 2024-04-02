@@ -82,15 +82,21 @@ static void resetPEcycle(struct ssdparams *spp) {
 }
 static void reportWAF(void) {
     printf("\n\r");
-    printf("host_write_bytes(%ld)\n\r", host_write_bytes);
-    printf("data_write_bytes(%ld)\n\r", data_write_bytes);
-    if(host_write_bytes == 0) printf("waf(NULL)\n\r");
-    else printf("waf(%f)\n\r", (float)data_write_bytes/(float)host_write_bytes);
+    // printf("host_write_page: %ld \n\r", host_write_page);
+    // printUint256(&host_write_page);
+
+    // printf("data_write_page: %ld \n\r", data_write_page);
+    // printUint256(&data_write_page);
+
+    printf("waf(%f) sample(%ld)\n\r", current_waf, num_collect);
 }
 static void resetWAF(void) {
     basic_printf("Reset WAF information\n\r");
-    host_write_bytes = 0;
-    data_write_bytes = 0;
+    host_write_page = 0;
+    data_write_page = 0;
+    // initUint256(&host_write_page);
+    // initUint256(&data_write_page);
+
 }
 //
 // hotstorage-gc
@@ -103,6 +109,7 @@ static void reportGCLine(struct ssd *ssd){
         printf("GCgroup[%d]: ch(%d) lun(%d) blk(%d) pg(%d)\n\r", i+1, gc_group_wpp[i].ch, gc_group_wpp[i].lun, gc_group_wpp[i].blk, gc_group_wpp[i].pg);
         printf("GCGroup(%d) pe(%ld) cap(%ld)\n\r", i+1, group_pecycle[i+1], group_capacity[i+1]);
     }
+    printf("Last Group Replication(%d)\n\r", last_self_replication);
 }
 // 
 #if 0
@@ -1071,8 +1078,12 @@ static uint16_t nvme_format(FemuCtrl *n, NvmeCmd *cmd)
     ns = &n->namespaces[nsid - 1];
 
     // HotStorage
-    host_write_bytes = 0;
-    data_write_bytes = 0;
+    host_write_page = 0;
+    data_write_page = 0;
+    // initUint256(&host_write_page);
+    // initUint256(&data_write_page);
+    num_collect = 0;
+    current_waf = 1;
     //
 
     return nvme_format_namespace(ns, lba_idx, meta_loc, pil, pi, sec_erase);

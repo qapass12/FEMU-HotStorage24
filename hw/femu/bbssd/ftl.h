@@ -59,7 +59,6 @@ enum {
 #define CH_BITS     (7)
 
 // hotstorage-gc
-#define gc_access_freq  60
 struct gc_group {
     uint16_t group_num;
     bool buffer;
