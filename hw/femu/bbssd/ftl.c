@@ -878,10 +878,9 @@ static uint64_t gc_write_page(struct ssd *ssd, struct ppa *old_ppa)
     mark_page_valid(ssd, &new_ppa);
 
     // hotstorage-gc
-    int temp_buf = buffer_group-1;
     if(buffer_group != 0) //buffer from g-high->g-low / buffer_g0=hot / buffer_g1=g1 / buffer_g2=g2 / buffer_g3=g3
     {
-        if(num_buffer < BUFFER_SIZE_PG && old_ppa->gc_info.group_num == temp_buf)
+        if(num_buffer < BUFFER_SIZE_PG && (old_ppa->gc_info.group_num == buffer_group-1 || old_ppa->gc_info.group_num == NUM_GC_GROUP))
         {
             new_ppa.gc_info.buffer = true;
             num_buffer++; // 5% of capacity
@@ -890,30 +889,14 @@ static uint64_t gc_write_page(struct ssd *ssd, struct ppa *old_ppa)
         else
         {
             // hotstorage
-            // prev_data_write_page = data_write_page;
             data_write_page++;
-            //if (data_write_page < prev_data_write_page) {
-            // if(data_write_page > 1800000000000){
-            //     collect_waf();
-            //     data_write_page = 0;
-            //     host_write_page = 0;
-            // }           
-            //addUint256(&data_write_page, 1);
             //
         }
     }
     else
     {
         // hotstorage
-        // prev_data_write_page = data_write_page;
         data_write_page++;
-        // if (data_write_page < prev_data_write_page) {
-        // if(data_write_page > 1800000000000){            
-        //     collect_waf();
-        //     data_write_page = 0;
-        //     host_write_page = 0;
-        // }         
-        //addUint256(&data_write_page, 1);
         //
     }
     if(old_ppa->gc_info.group_num == NUM_GC_GROUP)

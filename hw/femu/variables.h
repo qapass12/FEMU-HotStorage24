@@ -20,9 +20,9 @@ extern void gc_specific_printf(const char *format, ...);
 extern uint64_t group_pecycle[8];
 extern uint64_t group_capacity[8];
 extern uint64_t num_buffer; //g1 buffer size
-//#define BUFFER_SIZE_PG 838861
-#define BUFFER_SIZE_PG 1
-#define buffer_group 0 // 0=hot, 1=g1, 2=g2, 3=g3
+#define BUFFER_SIZE_PG 838861
+//#define BUFFER_SIZE_PG 0
+#define buffer_group 10 // 0=hot, 1=g1, 2=g2, 3=g3, 10=nobuf
 #define GC_HOT_LATENCY  60
 extern uint32_t last_self_replication;
 //
