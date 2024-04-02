@@ -94,6 +94,7 @@ struct write_pointer gc_group_wpp[NUM_GC_GROUP] = {0,};
 uint64_t group_pecycle[8] = {0,};
 uint64_t group_capacity[8] = {0,};
 uint64_t num_buffer = 0;
+uint64_t buffer_group = 0;  // 0=hot, 1=g1, 2=g2, 3=g3, 10=nobuf
 uint32_t last_self_replication = 0;
 //
 
@@ -656,14 +657,14 @@ static uint64_t ssd_advance_status(struct ssd *ssd, struct ppa *ppa, struct
         // hotstorage-gc
         if(ppa->gc_info.buffer)
         {
-        lun->next_lun_avail_time = nand_stime + spp->pg_rd_lat/100;
-        lat = lun->next_lun_avail_time - cmd_stime;
+            lun->next_lun_avail_time = nand_stime;
+            lat = lun->next_lun_avail_time - cmd_stime;
         }
         else
         {
-        //
-        lun->next_lun_avail_time = nand_stime + spp->pg_rd_lat;
-        lat = lun->next_lun_avail_time - cmd_stime;
+            //
+            lun->next_lun_avail_time = nand_stime + spp->pg_rd_lat;
+            lat = lun->next_lun_avail_time - cmd_stime;
         }
 #if 0
         lun->next_lun_avail_time = nand_stime + spp->pg_rd_lat;
@@ -684,23 +685,23 @@ static uint64_t ssd_advance_status(struct ssd *ssd, struct ppa *ppa, struct
         // hotstorage-gc
         if(ppa->gc_info.buffer)
         {
-        if (ncmd->type == USER_IO) {
-            lun->next_lun_avail_time = nand_stime + spp->pg_wr_lat/100;
-        } else {
-            lun->next_lun_avail_time = nand_stime + spp->pg_wr_lat/100;
-        }
-        lat = lun->next_lun_avail_time - cmd_stime;
+            if (ncmd->type == USER_IO) {
+                lun->next_lun_avail_time = nand_stime;
+            } else {
+                lun->next_lun_avail_time = nand_stime;
+            }
+            lat = lun->next_lun_avail_time - cmd_stime;
         }
         else
         {
         //    
 
-        if (ncmd->type == USER_IO) {
-            lun->next_lun_avail_time = nand_stime + spp->pg_wr_lat;
-        } else {
-            lun->next_lun_avail_time = nand_stime + spp->pg_wr_lat;
-        }
-        lat = lun->next_lun_avail_time - cmd_stime;
+            if (ncmd->type == USER_IO) {
+                lun->next_lun_avail_time = nand_stime + spp->pg_wr_lat;
+            } else {
+                lun->next_lun_avail_time = nand_stime + spp->pg_wr_lat;
+            }
+            lat = lun->next_lun_avail_time - cmd_stime;
         }
 
 #if 0
@@ -724,14 +725,14 @@ static uint64_t ssd_advance_status(struct ssd *ssd, struct ppa *ppa, struct
         // hotstorage-gc
         if(ppa->gc_info.buffer)
         {
-        lun->next_lun_avail_time = nand_stime + spp->blk_er_lat/100;
-        lat = lun->next_lun_avail_time - cmd_stime/100;
+            lun->next_lun_avail_time = nand_stime;
+            lat = lun->next_lun_avail_time - cmd_stime;
         }
         else
         {
-        //       
-        lun->next_lun_avail_time = nand_stime + spp->blk_er_lat;
-        lat = lun->next_lun_avail_time - cmd_stime;
+            //       
+            lun->next_lun_avail_time = nand_stime + spp->blk_er_lat;
+            lat = lun->next_lun_avail_time - cmd_stime;
         }
         break;
 
