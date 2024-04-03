@@ -32,15 +32,7 @@ static void printPEcycle(struct ssdparams *spp, uint32_t blk) {
     printf("BLK[%d]: ", blk);
     for (int j = 0; j < spp->pgs_per_blk; j++) {
         printf("%d ", pecycle[blk*spp->pgs_per_blk + j]);
-    }    
-
-    // for (int i = 0; i < spp->tt_blks; i++) {
-    //     printf("BLK[%d]: ", i);
-    //     for (int j = 0; j < spp->pgs_per_blk; j++) {
-    //         printf("%d ", pecycle[i*spp->pgs_per_blk + j]);
-    //     }
-    //     printf("\n");
-    // }
+    }
     printf("\n\r");
 }
 static void reportPEcycle(struct ssdparams *spp) {
@@ -80,36 +72,33 @@ static void resetPEcycle(struct ssdparams *spp) {
         pecycle[i] = 0;
     }  
 }
-static void reportWAF(void) {
+static void reportWAF(struct ssd *ssd) {
     printf("\n\r");
-    // printf("host_write_page: %ld \n\r", host_write_page);
-    // printUint256(&host_write_page);
+    // printf("ssd->host_write_page: %ld \n\r", ssd->host_write_page);
+    // printUint256(&ssd->host_write_page);
 
-    // printf("data_write_page: %ld \n\r", data_write_page);
-    // printUint256(&data_write_page);
+    // printf("ssd->data_write_page: %ld \n\r", ssd->data_write_page);
+    // printUint256(&ssd->data_write_page);
 
-    printf("waf(%f) sample(%ld)\n\r", current_waf, num_collect);
+    printf("waf(%f) sample(%ld)\n\r", ssd->current_waf, ssd->num_collect);
 }
-static void resetWAF(void) {
+static void resetWAF(struct ssd *ssd) {
     basic_printf("Reset WAF information\n\r");
-    host_write_page = 0;
-    data_write_page = 0;
-    // initUint256(&host_write_page);
-    // initUint256(&data_write_page);
-
+    ssd->host_write_page = 0;
+    ssd->data_write_page = 0;
 }
 //
 // hotstorage-gc
 static void reportGCLine(struct ssd *ssd){
     printf("\n\r");
     printf("NMgroup[0]: ch(%d) lun(%d) blk(%d) pg(%d)\n\r", ssd->wp.ch, ssd->wp.lun, ssd->wp.blk, ssd->wp.pg);
-    printf("NMGroup(0) pe(%ld) cap(%ld)\n\r", group_pecycle[0], group_capacity[0]);
+    printf("NMGroup(0) pe(%ld) cap(%ld)\n\r", ssd->group_pecycle[0], ssd->group_capacity[0]);
     for(int i=0; i <= NUM_GC_GROUP-1; i++)
     {
-        printf("GCgroup[%d]: ch(%d) lun(%d) blk(%d) pg(%d)\n\r", i+1, gc_group_wpp[i].ch, gc_group_wpp[i].lun, gc_group_wpp[i].blk, gc_group_wpp[i].pg);
-        printf("GCGroup(%d) pe(%ld) cap(%ld)\n\r", i+1, group_pecycle[i+1], group_capacity[i+1]);
+        printf("GCgroup[%d]: ch(%d) lun(%d) blk(%d) pg(%d)\n\r", i+1, ssd->gc_group_wpp[i].ch, ssd->gc_group_wpp[i].lun, ssd->gc_group_wpp[i].blk, ssd->gc_group_wpp[i].pg);
+        printf("GCGroup(%d) pe(%ld) cap(%ld)\n\r", i+1, ssd->group_pecycle[i+1], ssd->group_capacity[i+1]);
     }
-    printf("Last Group Replication(%d)\n\r", last_self_replication);
+    printf("Last Group Replication(%d)\n\r", ssd->last_self_replication);
 }
 // 
 #if 0
@@ -718,7 +707,7 @@ static uint16_t nvme_get_feature(FemuCtrl *n, NvmeCmd *cmd, NvmeCqe *cqe)
         reportPEcycle(&n->ssd->sp);
         break;
     case NVME_REPORT_WAF:
-        reportWAF();
+        reportWAF(n->ssd);
         break;        
     case NVME_REPORT_GC_LINE:
         reportGCLine(n->ssd);
@@ -799,8 +788,12 @@ static uint16_t nvme_set_feature(FemuCtrl *n, NvmeCmd *cmd, NvmeCqe *cqe)
         resetPEcycle(&n->ssd->sp);
         break;    
     case NVME_RESET_WAF:
-        resetWAF();
-        break;                     
+        resetWAF(n->ssd);
+        break;
+    case NVME_SET_BUFFER_GROUP:
+        n->ssd->buffer_group = dw11;
+        printf("set buffer_group(%d)\n\r", n->ssd->buffer_group);
+        break;                             
     //
     default:
         return NVME_INVALID_FIELD | NVME_DNR;
@@ -1045,6 +1038,32 @@ static uint16_t nvme_format_namespace(NvmeNamespace *ns, uint8_t lba_idx,
     return NVME_SUCCESS;
 }
 
+// hh format
+static inline int victim_line_cmp_pri(pqueue_pri_t next, pqueue_pri_t curr)
+{
+    return (next > curr);
+}
+
+static inline pqueue_pri_t victim_line_get_pri(void *a)
+{
+    return ((struct line *)a)->vpc;
+}
+
+static inline void victim_line_set_pri(void *a, pqueue_pri_t pri)
+{
+    ((struct line *)a)->vpc = pri;
+}
+
+static inline size_t victim_line_get_pos(void *a)
+{
+    return ((struct line *)a)->pos;
+}
+
+static inline void victim_line_set_pos(void *a, size_t pos)
+{
+    ((struct line *)a)->pos = pos;
+}
+//
 static uint16_t nvme_format(FemuCtrl *n, NvmeCmd *cmd)
 {
     NvmeNamespace *ns;
@@ -1071,20 +1090,131 @@ static uint16_t nvme_format(FemuCtrl *n, NvmeCmd *cmd)
         return ret;
     }
 
+    // init
+    struct ssd *ssd = n->ssd;
+    struct ssdparams *spp = &ssd->sp;
+    for (int i = 0; i < spp->nchs; i++) {
+        ssd->ch[i].next_ch_avail_time = 0;
+        ssd->ch[i].busy = 0;     
+        for (int j=0; j < ssd->ch[i].nluns; j++) {
+            ssd->ch[i].lun[j].next_lun_avail_time = 0;
+            ssd->ch[i].lun[j].busy = false;
+            for (int k = 0; k < ssd->ch[i].lun[j].npls; k++) {
+                for(int q=0; q < ssd->ch[i].lun[j].pl[k].nblks; q++){
+                    ssd->ch[i].lun[j].pl[k].blk[q].ipc = 0;
+                    ssd->ch[i].lun[j].pl[k].blk[q].vpc = 0;
+                    ssd->ch[i].lun[j].pl[k].blk[q].erase_cnt = 0;
+                    ssd->ch[i].lun[j].pl[k].blk[q].wp = 0;
+                    for(int p=0; p < ssd->ch[i].lun[j].pl[k].blk[q].npgs; p++){
+                        ssd->ch[i].lun[j].pl[k].blk[q].pg[p].status = PG_FREE;
+                    }
+                }
+            }
+        }
+    }
+
+    /* initialize maptbl */
+    for (int i = 0; i < spp->tt_pgs; i++) {
+        ssd->maptbl[i].ppa = UNMAPPED_PPA;
+    }
+
+    /* initialize rmap */
+    for (int i = 0; i < spp->tt_pgs; i++) {
+        ssd->rmap[i] = INVALID_LPN;
+    }
+
+    /* initialize all the lines */    
+    struct line_mgmt *lm = &ssd->lm;
+    struct line *line;
+
+    QTAILQ_INIT(&lm->free_line_list);
+    lm->victim_line_pq->size = 1;
+    lm->victim_line_pq->avail = lm->victim_line_pq->step = (spp->tt_lines + 1);  /* see comment above about n+1 */
+    lm->victim_line_pq->cmppri = victim_line_cmp_pri;
+    lm->victim_line_pq->setpri = victim_line_set_pri;
+    lm->victim_line_pq->getpri = victim_line_get_pri;
+    lm->victim_line_pq->getpos = victim_line_get_pos;
+    lm->victim_line_pq->setpos = victim_line_set_pos;
+    QTAILQ_INIT(&lm->full_line_list);
+
+    lm->free_line_cnt = 0;
+    for (int i = 0; i < lm->tt_lines; i++) {
+        line = &lm->lines[i];
+        line->id = i;
+        line->ipc = 0;
+        line->vpc = 0;
+        line->pos = 0;
+        /* initialize all the lines as free lines */
+        QTAILQ_INSERT_TAIL(&lm->free_line_list, line, entry);
+        lm->free_line_cnt++;
+    }
+
+    ftl_assert(lm->free_line_cnt == lm->tt_lines);
+    lm->victim_line_cnt = 0;
+    lm->full_line_cnt = 0;
+
+
+
+
+    /* initialize write pointer, this is how we allocate new pages for writes */
+    struct write_pointer *wpp = &ssd->wp;
+    struct line *curline = NULL;
+
+    curline = QTAILQ_FIRST(&lm->free_line_list);
+    QTAILQ_REMOVE(&lm->free_line_list, curline, entry);
+    lm->free_line_cnt--;
+
+    /* wpp->curline is always our next-to-write super-block */
+    wpp->curline = curline;
+    wpp->ch = 0;
+    wpp->lun = 0;
+    wpp->pg = 0;
+    wpp->blk = 0;
+    wpp->pl = 0;
+    // hotstorage-gc
+    wpp->curline->gc_group_num = HOT_GC_GROUP;
+    wpp->curline->gc_buffer = false;
+    for(int i = 0; i <= NUM_GC_GROUP-1; i++)
+    {
+        ssd->gc_group_wpp[i].curline = QTAILQ_FIRST(&lm->free_line_list);
+        if (!ssd->gc_group_wpp[i].curline) {
+            ftl_err("No free lines left in [%s] !!!!\n", ssd->ssdname);
+        }
+        // hotstorage-gc
+        ssd->gc_group_wpp[i].curline->gc_group_num = COLD_GC_GROUP;
+        //
+        QTAILQ_REMOVE(&lm->free_line_list,  ssd->gc_group_wpp[i].curline, entry);
+        lm->free_line_cnt--;
+
+        ssd->gc_group_wpp[i].curline->gc_group_num = i+1;
+        ssd->gc_group_wpp[i].curline->gc_buffer = false;
+        ssd->gc_group_wpp[i].blk = ssd->gc_group_wpp[i].curline->id;
+    }
+    //    
+
     if (nsid == 0 || nsid > n->num_namespaces) {
         return NVME_INVALID_NSID | NVME_DNR;
     }
 
     ns = &n->namespaces[nsid - 1];
 
-    // HotStorage
-    host_write_page = 0;
-    data_write_page = 0;
-    // initUint256(&host_write_page);
-    // initUint256(&data_write_page);
-    num_collect = 0;
-    current_waf = 1;
-    //
+    // hotstorage
+    ssd->data_write_page = 0;
+    ssd->host_write_page = 0;
+    ssd->num_collect = 0;
+    ssd->prev_num_collect = 0;
+    ssd->current_waf = 1;
+    // 
+    // hotstorage-gc
+    for(int i=0; i <= NUM_GC_GROUP; i++)
+    {
+        ssd->group_pecycle[i] = 0;
+        ssd->group_capacity[i] = 0;
+    }
+    ssd->num_buffer = 0;
+    ssd->buffer_group = 10;  // 0=hot, 1=g1, 2=g2, 3=g3, 10=nobuf
+    ssd->last_self_replication = 0;
+    //    
 
     return nvme_format_namespace(ns, lba_idx, meta_loc, pil, pi, sec_erase);
 }

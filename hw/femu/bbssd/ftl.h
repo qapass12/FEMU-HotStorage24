@@ -58,14 +58,6 @@ enum {
 #define LUN_BITS    (8)
 #define CH_BITS     (7)
 
-// hotstorage-gc
-struct gc_group {
-    uint16_t group_num;
-    bool buffer;
-    time_t last_accessed;
-};
-//
-
 /* describe a physical page addr */
 struct ppa {
     union {
@@ -82,7 +74,9 @@ struct ppa {
         uint64_t ppa;
     };
     // hotstorage-gc
-    struct gc_group gc_info;
+    uint16_t group_num;
+    uint32_t last_accessed;
+    bool buffer;
     //
 };
 
@@ -229,6 +223,22 @@ struct ssd {
     struct rte_ring **to_poller;
     bool *dataplane_started_ptr;
     QemuThread ftl_thread;
+
+    // hotstorage
+    uint64_t data_write_page;
+    uint64_t host_write_page;
+    uint64_t num_collect;
+    uint64_t prev_num_collect;
+    double current_waf;
+    // 
+    // hotstorage-gc
+    struct write_pointer gc_group_wpp[8];
+    uint64_t group_pecycle[8];
+    uint64_t group_capacity[8];
+    uint64_t num_buffer;
+    uint16_t buffer_group;  // 0=hot, 1=g1, 2=g2, 3=g3, 10=nobuf
+    uint32_t last_self_replication;
+    // 
 };
 
 void ssd_init(FemuCtrl *n);
