@@ -13,7 +13,7 @@
 
 ```
                               
-FEMU with PE-cycle & WAF Supported Version
+FEMU with Data Group & P/E-Cycle & WAF
 --------------------------
 We have used user-specific command sets for our added functions that comply the latest version of the NVMe Specification 2.0d standard.
 
