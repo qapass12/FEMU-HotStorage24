@@ -17,33 +17,37 @@ FEMU with PE-cycle & WAF Supported Version
 --------------------------
 We have used user-specific command sets for our added functions that comply the latest version of the NVMe Specification 2.0d standard.
 
-1) Print PE-cycle for a specific #blk
+1) Print P/E-cycle for a specific #blk
    
     ``nvme get-feature /dev/nvme0n1 -f 0x82 -c #blk``
 
    
-3) Report overall PE-cycle
+3) Report overall P/E-cycle
    
      ``nvme get-feature /dev/nvme0n1 -f 0x83``
 
    
-5) Reset PE-cycle
+5) Reset P/E-cycle
    
     ``nvme set-feature /dev/nvme0n1 -f 0x84``
 
+   (format-nvme command does not reset P/E cycle)
 
 
 7) Report WAF information
    
      ``nvme get-feature /dev/nvme0n1 -f 0x85``
 
+  
+9) Reset WAF
    
-8) Reset WAF    
      ``nvme set-feature /dev/nvme0n1 -f 0x86``
 
+   (format-nvme command does reset WAF)
 
-9) Set Buffered Data Group
+
+11) Set Buffered Data Group
+    
      ``nvme set-feature /dev/nvme0n1 -f 0x88 -v #group`` (0=hot group / 1=g1 / 2=g2/ 3=g3 / 10=no buffer)
    
-   (format-nvme command also resetting WAF)
  
