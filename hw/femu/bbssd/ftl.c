@@ -289,9 +289,9 @@ static void advance_PEcycle(struct ssd *ssd, struct write_pointer *wpp)
     {
         pecycle[page_address]++;
     // hotstorage-gc
-        ssd->group_pecycle[ssd->wp.curline->gc_group_num]++;
+        ssd->group_pecycle[wpp->curline->gc_group_num]++;
     }
-    ssd->group_capacity[ssd->wp.curline->gc_group_num]++;
+    ssd->group_capacity[wpp->curline->gc_group_num]++;
     //
 }
 static uint64_t get_PEcycle(struct ssd *ssd, struct write_pointer *wpp)
@@ -590,7 +590,9 @@ void ssd_init(FemuCtrl *n)
         ssd->group_capacity[i] = 0;
     }
     ssd->num_buffer = 0;
+    ssd->num_buffer_reclaim = 0;
     ssd->buffer_group = 10;  // 0=hot, 1=g1, 2=g2, 3=g3, 10=nobuf
+    ssd->last_pure = 0;
     ssd->last_self_replication = 0;
     //
 
@@ -922,7 +924,7 @@ static uint64_t gc_write_page(struct ssd *ssd, struct ppa *old_ppa)
     // hotstorage-gc
     if(ssd->buffer_group != 10) // ssd->buffer_group(10) = no buffer
     {
-        if(ssd->num_buffer < BUFFER_SIZE_PG && (old_ppa->group_num == ssd->buffer_group-1 || old_ppa->group_num == NUM_GC_GROUP))
+        if(ssd->num_buffer < BUFFER_SIZE_PG && (old_ppa->group_num == ssd->buffer_group-1 || (old_ppa->group_num == NUM_GC_GROUP && ssd->buffer_group==NUM_GC_GROUP) ))
         {
             new_ppa.buffer = true;
             ssd->num_buffer++; // 5% of capacity
@@ -942,7 +944,11 @@ static uint64_t gc_write_page(struct ssd *ssd, struct ppa *old_ppa)
         //
     }
   
-    if(old_ppa->group_num == NUM_GC_GROUP)
+    if(old_ppa->group_num == NUM_GC_GROUP-1)
+    {
+        ssd->last_pure++;
+    }
+    else if(old_ppa->group_num == NUM_GC_GROUP)
     {
         ssd->last_self_replication++;
     }    
@@ -1025,6 +1031,7 @@ static void clean_one_block(struct ssd *ssd, struct ppa *ppa)
         if(ppa->buffer)
         {
             ssd->num_buffer--;
+            ssd->num_buffer_reclaim++;
         }
         ssd->group_capacity[ppa->group_num]--;     
         //
@@ -1181,14 +1188,16 @@ static uint64_t ssd_write(struct ssd *ssd, NvmeRequest *req)
     }
 
     for (lpn = start_lpn; lpn <= end_lpn; lpn++) {
+        diff_time = GC_HOT_LATENCY+1;
         ppa = get_maptbl_ent(ssd, lpn);
-        // hotstorage-gc
-        diff_time = (unsigned int)difftime(qemu_clock_get_ns(QEMU_CLOCK_REALTIME)/NANOSECONDS_PER_SECOND, ppa.last_accessed);
-        //
+
         if (mapped_ppa(&ppa)) {
             /* update old page information first */
             mark_page_invalid(ssd, &ppa);
             set_rmap_ent(ssd, INVALID_LPN, &ppa);
+            // hotstorage-gc
+            diff_time = (unsigned int)difftime(qemu_clock_get_ns(QEMU_CLOCK_REALTIME)/NANOSECONDS_PER_SECOND, ppa.last_accessed);
+            //            
         }       
 
         //hotstorage-gc
@@ -1215,7 +1224,7 @@ static uint64_t ssd_write(struct ssd *ssd, NvmeRequest *req)
             ppa = get_new_page(ssd);
             /* update maptbl */                
             ppa.group_num = COLD_GC_GROUP;
-            if(ssd->buffer_group == 1 && (ssd->num_buffer < BUFFER_SIZE_PG)) // data to g0
+            if(ssd->buffer_group == 1 && (ssd->num_buffer < BUFFER_SIZE_PG)) // data to g1
             {
                 ppa.buffer = true;
                 ssd->num_buffer++; // 5% of capacity

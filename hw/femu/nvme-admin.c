@@ -81,6 +81,7 @@ static void reportWAF(struct ssd *ssd) {
     // printUint256(&ssd->data_write_page);
 
     printf("waf(%f) sample(%ld)\n\r", ssd->current_waf, ssd->num_collect);
+    printf("num_buffer(%ld/%d) reclaim(%ld)\n\r", ssd->num_buffer, BUFFER_SIZE_PG, ssd->num_buffer_reclaim);
 }
 static void resetWAF(struct ssd *ssd) {
     basic_printf("Reset WAF information\n\r");
@@ -98,7 +99,7 @@ static void reportGCLine(struct ssd *ssd){
         printf("GCgroup[%d]: ch(%d) lun(%d) blk(%d) pg(%d)\n\r", i+1, ssd->gc_group_wpp[i].ch, ssd->gc_group_wpp[i].lun, ssd->gc_group_wpp[i].blk, ssd->gc_group_wpp[i].pg);
         printf("GCGroup(%d) pe(%ld) cap(%ld)\n\r", i+1, ssd->group_pecycle[i+1], ssd->group_capacity[i+1]);
     }
-    printf("Last Group Replication(%d)\n\r", ssd->last_self_replication);
+    printf("Last Pure(%d) Last Group Replication(%d)\n\r", ssd->last_pure, ssd->last_self_replication);
 }
 // 
 #if 0
@@ -1212,8 +1213,10 @@ static uint16_t nvme_format(FemuCtrl *n, NvmeCmd *cmd)
         ssd->group_capacity[i] = 0;
     }
     ssd->num_buffer = 0;
+    ssd->num_buffer_reclaim = 0;
     ssd->buffer_group = 10;  // 0=hot, 1=g1, 2=g2, 3=g3, 10=nobuf
     ssd->last_self_replication = 0;
+    ssd->last_pure = 0;
     //    
 
     return nvme_format_namespace(ns, lba_idx, meta_loc, pil, pi, sec_erase);
