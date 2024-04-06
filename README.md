@@ -38,9 +38,12 @@ We have used user-specific command sets for our added functions that comply the 
      ``nvme get-feature /dev/nvme0n1 -f 0x85``
 
    
-9) Reset WAF
-    
+8) Reset WAF    
      ``nvme set-feature /dev/nvme0n1 -f 0x86``
+
+
+9) Set Buffered Data Group
+     ``nvme set-feature /dev/nvme0n1 -f 0x88 -v #group`` (0=hot group / 1=g1 / 2=g2/ 3=g3 / 10=no buffer)
    
    (format-nvme command also resetting WAF)
  
