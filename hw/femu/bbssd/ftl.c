@@ -6,8 +6,8 @@
 //#define FEMU_DEBUG_FTL
 
 // hotstorage
-uint64_t data_write_bytes = 0;
-uint64_t host_write_bytes = 0;
+// uint64_t data_write_bytes = 0;
+// uint64_t host_write_bytes = 0;
 //
 
 static void *ftl_thread(void *arg);
@@ -200,7 +200,7 @@ static void ssd_advance_write_pointer(struct ssd *ssd)
     // hotstorage
     detail_printf("[ch%d][lun%d][pl%d][blk%d][pg%d] BeforePE:(%ld) / ", wpp->ch, wpp->lun, wpp->pl, wpp->blk, wpp->pg, get_PEcycle(ssd, wpp));
     advance_PEcycle(ssd, wpp);
-    detail_printf("AfterPE:(%ld)\n", get_PEcycle(ssd, wpp));
+    detail_printf("AfterPE:(%ld)\n\r", get_PEcycle(ssd, wpp));
     // 
 
     check_addr(wpp->ch, spp->nchs);
@@ -440,6 +440,14 @@ void ssd_init(FemuCtrl *n)
 
     /* initialize write pointer, this is how we allocate new pages for writes */
     ssd_init_write_pointer(ssd);
+
+    // hotstorage
+    ssd->data_write_page = 0;
+    ssd->host_write_page = 0;
+    ssd->num_collect = 0;
+    ssd->prev_num_collect = 0;
+    ssd->current_waf = 1;
+    //     
 
     qemu_thread_create(&ssd->ftl_thread, "FEMU-FTL-Thread", ftl_thread, n,
                        QEMU_THREAD_JOINABLE);
@@ -697,7 +705,7 @@ static uint64_t gc_write_page(struct ssd *ssd, struct ppa *old_ppa)
     mark_page_valid(ssd, &new_ppa);
 
     // hotstorage
-    data_write_bytes += (ssd->sp.secsz * ssd->sp.secs_per_pg);
+    ssd->data_write_page++;
     //
 
     /* need to advance the write pointer here */
@@ -873,6 +881,10 @@ static uint64_t ssd_write(struct ssd *ssd, NvmeRequest *req)
     uint64_t curlat = 0, maxlat = 0;
     int r;
 
+    // hotstorage
+    ssd->prev_num_collect = ssd->num_collect;
+    // 
+
     if (end_lpn >= spp->tt_pgs) {
         ftl_err("start_lpn=%"PRIu64",tt_pgs=%d\n", start_lpn, ssd->sp.tt_pgs);
     }
@@ -902,8 +914,15 @@ static uint64_t ssd_write(struct ssd *ssd, NvmeRequest *req)
         mark_page_valid(ssd, &ppa);
 
         // hotstorage
-        host_write_bytes += (ssd->sp.secsz * len);
-        data_write_bytes += (ssd->sp.secsz * len);
+        ssd->host_write_page++;
+        ssd->data_write_page++;
+        if(ssd->host_write_page > ssd->data_write_page)
+        {
+            printf("ssd->host_write_page:%ld\n\r", ssd->host_write_page);
+            printf("ssd->data_write_page:%ld\n\r", ssd->data_write_page);
+
+            assert(ssd->host_write_page <= ssd->data_write_page);
+        }            
         //
 
         /* need to advance the write pointer here */
@@ -917,6 +936,23 @@ static uint64_t ssd_write(struct ssd *ssd, NvmeRequest *req)
         curlat = ssd_advance_status(ssd, &ppa, &swr);
         maxlat = (curlat > maxlat) ? curlat : maxlat;
     }
+    // hotstorage
+    if(ssd->host_write_page > 0)
+    {
+        ssd->current_waf = ( (ssd->current_waf * ssd->num_collect) + ((double)ssd->data_write_page / (double)ssd->host_write_page) ) / ((double)ssd->num_collect+1);
+        ssd->num_collect++;
+
+        assert(ssd->num_collect > ssd->prev_num_collect); //check overflow
+        if(ssd->num_collect != ssd->prev_num_collect+1)
+        {
+            printf("num_collect(%lu) ssd->prev_num_collect(%lu)\n\r", ssd->num_collect,ssd->prev_num_collect);
+            assert(ssd->num_collect == ssd->prev_num_collect + 1); //check overflow
+        }
+        assert(ssd->data_write_page >= ssd->host_write_page);
+        ssd->data_write_page = 0;
+        ssd->host_write_page = 0;
+    }
+    //    
 
     return maxlat;
 }

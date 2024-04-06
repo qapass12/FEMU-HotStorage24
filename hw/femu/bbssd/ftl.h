@@ -214,6 +214,14 @@ struct ssd {
     struct rte_ring **to_poller;
     bool *dataplane_started_ptr;
     QemuThread ftl_thread;
+
+    // hotstorage
+    uint64_t data_write_page;
+    uint64_t host_write_page;
+    uint64_t num_collect;
+    uint64_t prev_num_collect;
+    double current_waf;
+    // 
 };
 
 void ssd_init(FemuCtrl *n);

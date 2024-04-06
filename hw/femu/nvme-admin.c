@@ -30,16 +30,8 @@ static void printPEcycle(struct ssdparams *spp, uint32_t blk) {
     printf("BLK[%d]: ", blk);
     for (int j = 0; j < spp->pgs_per_blk; j++) {
         printf("%d ", pecycle[blk*spp->pgs_per_blk + j]);
-    }    
-
-    // for (int i = 0; i < spp->tt_blks; i++) {
-    //     printf("BLK[%d]: ", i);
-    //     for (int j = 0; j < spp->pgs_per_blk; j++) {
-    //         printf("%d ", pecycle[i*spp->pgs_per_blk + j]);
-    //     }
-    //     printf("\n");
-    // }
-    printf("\n");
+    }
+    printf("\n\r");
 }
 static void reportPEcycle(struct ssdparams *spp) {
     uint32_t max = pecycle[0];
@@ -63,30 +55,34 @@ static void reportPEcycle(struct ssdparams *spp) {
         tt += pecycle[i];
     }
     avg = (float)tt / (float)spp->tt_pgs;
-    printf("avgPEcycle = %f\n", avg);
-    printf("maxPEcycle = %d [%ldch][%ldlun][%ldpl][%ldblk][%ldpg]\n",
+    printf("avgPEcycle = %f\n\r", avg);
+    printf("maxPEcycle = %d [%ldch][%ldlun][%ldpl][%ldblk][%ldpg]\n\r",
         max, max_pg / spp->pgs_per_ch, max_pg % spp->pgs_per_ch / spp->pgs_per_lun, max_pg % spp->pgs_per_ch % spp->pgs_per_lun / spp->pgs_per_pl,
         max_pg % spp->pgs_per_ch % spp->pgs_per_lun % spp->pgs_per_pl / spp->pgs_per_blk, max_pg % spp->pgs_per_ch % spp->pgs_per_lun % spp->pgs_per_pl % spp->pgs_per_blk);
-    printf("minPEcycle = %d [%ldch][%ldlun][%ldpl][%ldblk][%ldpg]\n",
+    printf("minPEcycle = %d [%ldch][%ldlun][%ldpl][%ldblk][%ldpg]\n\r",
         min, min_pg / spp->pgs_per_ch, min_pg % spp->pgs_per_ch / spp->pgs_per_lun, min_pg % spp->pgs_per_ch % spp->pgs_per_lun / spp->pgs_per_pl,
         min_pg % spp->pgs_per_ch % spp->pgs_per_lun % spp->pgs_per_pl / spp->pgs_per_blk, min_pg % spp->pgs_per_ch % spp->pgs_per_lun % spp->pgs_per_pl % spp->pgs_per_blk);
 }
 static void resetPEcycle(struct ssdparams *spp) {
-    basic_printf("NVME_RESET_PECYCLE\n");
+    basic_printf("NVME_RESET_PECYCLE\n\r");
     for (int i = 0; i < spp->tt_pgs; i++) {
         pecycle[i] = 0;
     }  
 }
-static void reportWAF(void) {
-    printf("host_write_bytes(%ld)\n", host_write_bytes);
-    printf("data_write_bytes(%ld)\n", data_write_bytes);
-    if(host_write_bytes == 0) printf("waf(NULL)\n");
-    else printf("waf(%f)\n", (float)data_write_bytes/(float)host_write_bytes);
+static void reportWAF(struct ssd *ssd) {
+    printf("\n\r");
+    // printf("ssd->host_write_page: %ld \n\r", ssd->host_write_page);
+    // printUint256(&ssd->host_write_page);
+
+    // printf("ssd->data_write_page: %ld \n\r", ssd->data_write_page);
+    // printUint256(&ssd->data_write_page);
+
+    printf("waf(%f) sample(%ld)\n\r", ssd->current_waf, ssd->num_collect);
 }
-static void resetWAF(void) {
-    basic_printf("Reset WAF\n");
-    host_write_bytes = 0;
-    data_write_bytes = 0;
+static void resetWAF(struct ssd *ssd) {
+    basic_printf("Reset WAF\n\r");
+    ssd->host_write_page = 0;
+    ssd->data_write_page = 0;
 }
 //
 
@@ -696,7 +692,7 @@ static uint16_t nvme_get_feature(FemuCtrl *n, NvmeCmd *cmd, NvmeCqe *cqe)
         reportPEcycle(&n->ssd->sp);
         break;
     case NVME_REPORT_WAF:
-        reportWAF();
+        reportWAF(n->ssd);
         break;                
     // 
     default:
@@ -774,7 +770,7 @@ static uint16_t nvme_set_feature(FemuCtrl *n, NvmeCmd *cmd, NvmeCqe *cqe)
         resetPEcycle(&n->ssd->sp);
         break;    
     case NVME_RESET_WAF:
-        resetWAF();
+        resetWAF(n->ssd);
         break;                     
     //
     default:
@@ -1052,10 +1048,14 @@ static uint16_t nvme_format(FemuCtrl *n, NvmeCmd *cmd)
 
     ns = &n->namespaces[nsid - 1];
 
-    // HotStorage
-    host_write_bytes = 0;
-    data_write_bytes = 0;
-    //
+    // hotstorage
+    struct ssd *ssd = n->ssd;
+    ssd->data_write_page = 0;
+    ssd->host_write_page = 0;
+    ssd->num_collect = 0;
+    ssd->prev_num_collect = 0;
+    ssd->current_waf = 1;
+    // 
 
     return nvme_format_namespace(ns, lba_idx, meta_loc, pil, pi, sec_erase);
 }
