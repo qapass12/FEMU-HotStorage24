@@ -24,10 +24,15 @@ We have used user-specific command sets for our added functions that comply the 
    ![image](https://github.com/qapass12/FEMU-HotStorage24/assets/164226168/71a01a15-ed7a-499a-9cce-88520c4a0d7f)
 
 
+
    
 3) Report overall P/E-cycle
    
      ``nvme get-feature /dev/nvme0n1 -f 0x83``
+
+   ![image](https://github.com/qapass12/FEMU-HotStorage24/assets/164226168/1a41bf05-2167-49e4-b481-cb5b2a0acfe2)
+
+
 
    
 5) Reset P/E-cycle
@@ -36,10 +41,18 @@ We have used user-specific command sets for our added functions that comply the 
 
    (format-nvme command does not reset P/E cycle)
 
+   ![image](https://github.com/qapass12/FEMU-HotStorage24/assets/164226168/8fda5e4b-b236-48be-a847-7cebdaedb4f5)
+   
+
+
 
 7) Report WAF information
    
      ``nvme get-feature /dev/nvme0n1 -f 0x85``
+
+   ![image](https://github.com/qapass12/FEMU-HotStorage24/assets/164226168/863ccb46-14d4-41ad-a3ca-d8e08e75c68d)
+   
+
 
   
 9) Reset WAF
@@ -47,6 +60,10 @@ We have used user-specific command sets for our added functions that comply the 
      ``nvme set-feature /dev/nvme0n1 -f 0x86``
 
    (format-nvme command does reset WAF)
+   
+   ![image](https://github.com/qapass12/FEMU-HotStorage24/assets/164226168/0ed427b5-0712-442a-9d36-9e7a9b7beda6)
+   
+
 
 
 11) Set Buffered Data Group
